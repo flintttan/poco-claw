@@ -6,7 +6,7 @@ on:
       - backend/assets/**
   push:
     branches:
-      - main
+      - "**"
     paths-ignore:
       - backend/assets/**
   workflow_dispatch:

@@ -1,0 +1,66 @@
+name: CI Docker Build
+
+on:
+  pull_request:
+    paths-ignore:
+      - backend/assets/**
+      - docs/**
+      - "*.md"
+  push:
+    branches:
+      - "**"
+    paths-ignore:
+      - backend/assets/**
+      - docs/**
+      - "*.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  docker-build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: backend
+            dockerfile: docker/backend/Dockerfile
+          - name: executor-manager
+            dockerfile: docker/executor_manager/Dockerfile
+          - name: executor-lite
+            dockerfile: docker/executor/Dockerfile
+            sandbox_variant: lite
+          - name: executor-full
+            dockerfile: docker/executor/Dockerfile
+            sandbox_variant: full
+          - name: frontend
+            dockerfile: docker/frontend/Dockerfile
+
+    name: Docker Build (${{ matrix.name }})
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/amd64
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            APP_UID=1000
+            NEXT_PUBLIC_SESSION_POLLING_INTERVAL=2500
+            NEXT_PUBLIC_MESSAGE_POLLING_INTERVAL=2500
+            SANDBOX_VARIANT=${{ matrix.sandbox_variant || 'lite' }}
