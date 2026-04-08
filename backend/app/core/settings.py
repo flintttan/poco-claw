@@ -108,9 +108,10 @@ class Settings(BaseSettings):
     s3_bucket: str | None = Field(default=None, alias="S3_BUCKET")
     s3_key_prefix: str | None = Field(default=None, alias="S3_KEY_PREFIX")
     s3_public_read: bool = Field(default=False, alias="S3_PUBLIC_READ")
-    s3_signature_version: str | None = Field(
-        default=None, alias="S3_SIGNATURE_VERSION"
+    s3_public_endpoint_bucket_bound: bool = Field(
+        default=False, alias="S3_PUBLIC_ENDPOINT_BUCKET_BOUND"
     )
+    s3_signature_version: str | None = Field(default=None, alias="S3_SIGNATURE_VERSION")
     s3_force_path_style: bool = Field(default=True, alias="S3_FORCE_PATH_STYLE")
     s3_presign_expires: int = Field(default=300, alias="S3_PRESIGN_EXPIRES")
     s3_connect_timeout_seconds: int = Field(

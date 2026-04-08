@@ -3,7 +3,7 @@ import logging
 import mimetypes
 from pathlib import Path
 from pathlib import PurePosixPath
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit, urlunsplit
 from typing import Any, Iterable
 
 import boto3
@@ -40,6 +40,7 @@ class S3StorageService:
         self.presign_expires = settings.s3_presign_expires
         self.key_prefix = self._normalize_prefix(settings.s3_key_prefix)
         self.public_read = settings.s3_public_read
+        self.public_endpoint_bucket_bound = settings.s3_public_endpoint_bucket_bound
 
         endpoint = settings.s3_endpoint.rstrip("/")
         public_endpoint = (settings.s3_public_endpoint or "").strip()
@@ -553,9 +554,25 @@ class S3StorageService:
         return normalized_key
 
     def _build_public_url(self, key: str) -> str:
-        encoded_segments = [quote(segment, safe="") for segment in key.split("/") if segment]
+        encoded_segments = [
+            quote(segment, safe="") for segment in key.split("/") if segment
+        ]
         path = "/".join(encoded_segments)
         if not path:
             return self.presign_client.meta.endpoint_url.rstrip("/")
         endpoint = self.presign_client.meta.endpoint_url.rstrip("/")
-        return f"{endpoint}/{path}"
+        if self.public_endpoint_bucket_bound:
+            return f"{endpoint}/{path}"
+
+        if self.client.meta.config.s3.get("addressing_style") == "path":
+            bucket = quote(self.bucket, safe="")
+            return f"{endpoint}/{bucket}/{path}"
+
+        parts = urlsplit(endpoint)
+        hostname = parts.hostname or ""
+        if hostname.startswith(f"{self.bucket}."):
+            netloc = parts.netloc
+        else:
+            bucket_host = f"{self.bucket}.{hostname}" if hostname else self.bucket
+            netloc = f"{bucket_host}:{parts.port}" if parts.port else bucket_host
+        return urlunsplit((parts.scheme, netloc, f"/{path}", "", ""))
