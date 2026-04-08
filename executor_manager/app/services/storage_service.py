@@ -36,6 +36,7 @@ class S3StorageService:
         self.key_prefix = self._normalize_prefix(settings.s3_key_prefix)
 
         config_kwargs: dict[str, Any] = {
+            "signature_version": settings.s3_signature_version or "s3v4",
             "connect_timeout": settings.s3_connect_timeout_seconds,
             "read_timeout": settings.s3_read_timeout_seconds,
             "retries": {
@@ -45,6 +46,8 @@ class S3StorageService:
         }
         if settings.s3_force_path_style:
             config_kwargs["s3"] = {"addressing_style": "path"}
+        else:
+            config_kwargs["s3"] = {"addressing_style": "virtual"}
         config = Config(**config_kwargs) if config_kwargs else None
 
         self.client = boto3.client(
