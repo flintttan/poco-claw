@@ -18,7 +18,11 @@ import { chatService } from "@/features/chat/api/chat-api";
 interface ArtifactsPanelProps {
   fileChanges?: FileChange[];
   sessionId?: string;
+  runId?: string;
+  legacySessionArtifactsAvailable?: boolean;
   sessionStatus?:
+    | "queued"
+    | "claimed"
     | "pending"
     | "running"
     | "canceling"
@@ -51,6 +55,8 @@ interface ArtifactsPanelProps {
 export function ArtifactsPanel({
   fileChanges = [],
   sessionId,
+  runId,
+  legacySessionArtifactsAvailable = false,
   sessionStatus,
   headerAction,
   hideHeader = false,
@@ -70,7 +76,7 @@ export function ArtifactsPanel({
     selectFile,
     closeViewer,
     ensureFreshFile,
-  } = useArtifacts({ sessionId, sessionStatus });
+  } = useArtifacts({ sessionId, runId, sessionStatus });
   const openExpandedPreview = React.useCallback(() => {
     setIsExpandedPreviewOpen(true);
   }, []);
@@ -93,7 +99,12 @@ export function ArtifactsPanel({
     }
 
     if (fileChanges.length === 0) {
-      return <ArtifactsEmpty sessionStatus={sessionStatus} />;
+      return (
+        <ArtifactsEmpty
+          legacySessionArtifactsAvailable={legacySessionArtifactsAvailable}
+          sessionStatus={sessionStatus}
+        />
+      );
     }
 
     return (
@@ -173,7 +184,9 @@ export function ArtifactsPanel({
                 node.mount_id,
                 node.path,
               )
-            : await chatService.getFolderArchive(sessionId, node.path);
+            : runId
+              ? await chatService.getRunFolderArchive(runId, node.path)
+              : await chatService.getFolderArchive(sessionId, node.path);
         if (!response.url) {
           toast.error(t("fileSidebar.archiveNotAvailable"));
           return;
@@ -185,7 +198,7 @@ export function ArtifactsPanel({
         toast.error(t("fileSidebar.downloadFailed"));
       }
     },
-    [sessionId, t],
+    [runId, sessionId, t],
   );
 
   const handleSubmitSkill = React.useCallback(
@@ -262,6 +275,7 @@ export function ArtifactsPanel({
               }}
               selectedFile={selectedFile}
               sessionId={sessionId}
+              runId={runId}
               onPackageSkill={
                 sessionId ? (node) => setPackageTarget(node) : undefined
               }

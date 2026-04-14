@@ -610,7 +610,8 @@
         "terminal": "终端"
       },
       "limitHint": "仅展示前 {{limit}} 步",
-      "liveLabel": "实时"
+      "liveLabel": "实时",
+      "legacyHint": "较早的回放数据可能仅能在旧的会话级历史中查看。"
     },
     "browser": {
       "screenshotAlt": "浏览器截图",
@@ -633,7 +634,8 @@
       "creating": "Poco 正在创造中...",
       "working": "Agent is working on your task",
       "noChanges": "暂无文件变更",
-      "description": "AI 执行产生的文件变更将在此处展示"
+      "description": "AI 执行产生的文件变更将在此处展示",
+      "legacyHint": "较早的文件数据可能仅能在会话级的最新工作区视图中查看。"
     },
     "viewer": {
       "loadingEngine": "正在加载预览引擎...",

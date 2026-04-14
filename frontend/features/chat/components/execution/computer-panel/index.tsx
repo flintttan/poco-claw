@@ -29,7 +29,7 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { useT } from "@/lib/i18n/client";
-import { getBrowserScreenshotAction } from "@/features/chat/actions/query-actions";
+import { getRunBrowserScreenshotAction } from "@/features/chat/actions/query-actions";
 import type { ToolExecutionResponse } from "@/features/chat/types";
 import { useToolExecutions } from "./hooks/use-tool-executions";
 import { ApiError } from "@/lib/errors";
@@ -51,8 +51,11 @@ import {
 } from "@/features/chat/components/execution/computer-panel/replay/replay-utils";
 
 interface ComputerPanelProps {
-  sessionId: string;
+  runId?: string;
+  legacySessionReplayAvailable?: boolean;
   sessionStatus?:
+    | "queued"
+    | "claimed"
     | "pending"
     | "running"
     | "canceling"
@@ -92,7 +95,8 @@ function renderToolKindIcon(toolName: string): React.ReactNode {
 }
 
 export function ComputerPanel({
-  sessionId,
+  runId,
+  legacySessionReplayAvailable = false,
   sessionStatus,
   headerAction,
   hideHeader = false,
@@ -102,7 +106,7 @@ export function ComputerPanel({
 
   const { executions, isLoading, isLoadingMore, hasMore, loadMore } =
     useToolExecutions({
-      sessionId,
+      runId,
       isActive,
       pollingIntervalMs: 2000,
       limit: 100,
@@ -117,6 +121,7 @@ export function ComputerPanel({
 
   const fetchBrowserScreenshot = React.useCallback(
     async (toolUseId: string, retryOn404: boolean): Promise<void> => {
+      if (!runId) return;
       const id = toolUseId.trim();
       if (
         !id ||
@@ -130,8 +135,8 @@ export function ComputerPanel({
 
       const fetchWithRetry = async (attempts = 0): Promise<void> => {
         try {
-          const res = await getBrowserScreenshotAction({
-            sessionId,
+          const res = await getRunBrowserScreenshotAction({
+            runId,
             toolUseId: id,
           });
           screenshotCacheRef.current.set(id, res.url);
@@ -156,7 +161,7 @@ export function ComputerPanel({
 
       await fetchWithRetry();
     },
-    [sessionId],
+    [runId],
   );
 
   const replayFramesAll: ReplayFrame[] = React.useMemo(() => {
@@ -706,7 +711,14 @@ export function ComputerPanel({
           <>{renderSkeletons(5)}</>
         ) : replayFrames.length === 0 ? (
           <div className="flex flex-1 items-center justify-center rounded-lg bg-muted/30 px-4 py-6 text-center text-sm text-muted-foreground">
-            {t("computer.replay.empty")}
+            <div className="space-y-1">
+              <div>{t("computer.replay.empty")}</div>
+              {legacySessionReplayAvailable ? (
+                <div className="text-xs text-muted-foreground/80">
+                  {t("computer.replay.legacyHint")}
+                </div>
+              ) : null}
+            </div>
           </div>
         ) : (
           <motion.div

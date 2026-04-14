@@ -2,20 +2,20 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  getToolExecutionsAction,
-  getToolExecutionsDeltaAction,
+  getRunToolExecutionsAction,
+  getRunToolExecutionsDeltaAction,
 } from "@/features/chat/actions/query-actions";
 import type { ToolExecutionResponse } from "@/features/chat/types";
 
 interface UseToolExecutionsOptions {
-  sessionId?: string;
+  runId?: string;
   isActive?: boolean;
   pollingIntervalMs?: number;
   limit?: number;
 }
 
 export function useToolExecutions({
-  sessionId,
+  runId,
   isActive = false,
   pollingIntervalMs = 2000,
   limit = 500,
@@ -25,7 +25,7 @@ export function useToolExecutions({
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [error, setError] = useState<Error | null>(null);
-  const lastSessionIdRef = useRef<string | null>(null);
+  const lastRunIdRef = useRef<string | null>(null);
   const hasLoadedOnceRef = useRef(false);
   const requestSeqRef = useRef(0);
   const prevIsActiveRef = useRef(isActive);
@@ -80,7 +80,7 @@ export function useToolExecutions({
 
   const fetchSnapshot = useCallback(
     async (replace = false) => {
-      if (!sessionId) return;
+      if (!runId) return;
       const seq = (requestSeqRef.current += 1);
       const shouldShowLoading = !hasLoadedOnceRef.current && replace;
       if (shouldShowLoading) {
@@ -90,8 +90,8 @@ export function useToolExecutions({
       const offset = replace ? 0 : executions.length;
 
       try {
-        const data = await getToolExecutionsAction({
-          sessionId,
+        const data = await getRunToolExecutionsAction({
+          runId,
           limit,
           offset,
         });
@@ -118,11 +118,11 @@ export function useToolExecutions({
         hasLoadedOnceRef.current = true;
       }
     },
-    [executions, limit, mergeById, sessionId, updateCursor],
+    [executions, limit, mergeById, runId, updateCursor],
   );
 
   const fetchDelta = useCallback(async () => {
-    if (!sessionId) return;
+    if (!runId) return;
     const seq = requestSeqRef.current;
     const { afterCreatedAt, afterId } = cursorRef.current;
     if (!afterCreatedAt) {
@@ -139,8 +139,8 @@ export function useToolExecutions({
 
       // Drain a few pages in one poll cycle to catch up quickly after bursts.
       while (hasMore && guard < 5) {
-        const payload = await getToolExecutionsDeltaAction({
-          sessionId,
+        const payload = await getRunToolExecutionsDeltaAction({
+          runId,
           afterCreatedAt: currentCreatedAt,
           afterId: currentId,
           limit,
@@ -171,19 +171,19 @@ export function useToolExecutions({
       if (seq !== requestSeqRef.current) return;
       setError(err as Error);
     }
-  }, [fetchSnapshot, limit, mergeById, sessionId]);
+  }, [fetchSnapshot, limit, mergeById, runId]);
 
   const loadMore = useCallback(() => {
-    if (isLoadingMore || !hasMore || !sessionId) return;
+    if (isLoadingMore || !hasMore || !runId) return;
     setIsLoadingMore(true);
     void fetchSnapshot(false);
-  }, [fetchSnapshot, hasMore, isLoadingMore, sessionId]);
+  }, [fetchSnapshot, hasMore, isLoadingMore, runId]);
 
-  // Reset state when session changes.
+  // Reset state when run changes.
   useEffect(() => {
-    if (!sessionId) return;
-    if (lastSessionIdRef.current === sessionId) return;
-    lastSessionIdRef.current = sessionId;
+    if (!runId) return;
+    if (lastRunIdRef.current === runId) return;
+    lastRunIdRef.current = runId;
     hasLoadedOnceRef.current = false;
     requestSeqRef.current += 1;
     setExecutions([]);
@@ -193,28 +193,28 @@ export function useToolExecutions({
     setHasMore(true);
     cursorRef.current = {};
     void fetchSnapshot(true);
-  }, [fetchSnapshot, sessionId]);
+  }, [fetchSnapshot, runId]);
 
   // Poll while active.
   useEffect(() => {
-    if (!sessionId) return;
+    if (!runId) return;
     if (!isActive) return;
     const id = setInterval(() => {
       void fetchDelta();
     }, pollingIntervalMs);
     return () => clearInterval(id);
-  }, [fetchDelta, isActive, pollingIntervalMs, sessionId]);
+  }, [fetchDelta, isActive, pollingIntervalMs, runId]);
 
   // When a session transitions from active -> terminal, fetch once more so the UI
   // can pick up the final tool_output written during cancellation/failure.
   useEffect(() => {
-    if (!sessionId) return;
+    if (!runId) return;
     const wasActive = prevIsActiveRef.current;
     prevIsActiveRef.current = isActive;
     if (wasActive && !isActive) {
       void fetchDelta();
     }
-  }, [fetchDelta, isActive, sessionId]);
+  }, [fetchDelta, isActive, runId]);
 
   return {
     executions,

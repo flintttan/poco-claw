@@ -88,7 +88,10 @@ const findFileByPath = (
 
 interface UseArtifactsOptions {
   sessionId?: string;
+  runId?: string;
   sessionStatus?:
+    | "queued"
+    | "claimed"
     | "pending"
     | "running"
     | "canceling"
@@ -121,6 +124,7 @@ interface UseArtifactsReturn {
  */
 export function useArtifacts({
   sessionId,
+  runId,
   sessionStatus,
 }: UseArtifactsOptions): UseArtifactsReturn {
   const { t } = useT("translation");
@@ -139,7 +143,9 @@ export function useArtifacts({
       setIsRefreshing(true);
       try {
         const session = await chatService.getSessionRaw(sessionId);
-        const workspaceFiles = await chatService.getFiles(sessionId);
+        const workspaceFiles = runId
+          ? await chatService.getRunFiles(runId)
+          : await chatService.getFiles(sessionId);
         const filesystemMode =
           session.config_snapshot?.filesystem_mode === "local_mount"
             ? "local_mount"
@@ -181,7 +187,7 @@ export function useArtifacts({
 
     fetchPromiseRef.current = promise;
     return promise;
-  }, [sessionId, t]);
+  }, [runId, sessionId, t]);
 
   // Manual refresh method
   const refreshFiles = useCallback(async () => {
@@ -216,7 +222,7 @@ export function useArtifacts({
     setViewMode("artifacts");
     setSelectedPath(undefined);
     void fetchFiles();
-  }, [sessionId, fetchFiles]);
+  }, [runId, sessionId, fetchFiles]);
 
   // Auto-refresh when session transitions into a finished status.
   const prevStatusRef = useRef<typeof sessionStatus>(undefined);
