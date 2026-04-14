@@ -1,3 +1,4 @@
+import socket
 from functools import lru_cache
 from typing import Literal
 
@@ -29,6 +30,7 @@ class Settings(BaseSettings):
     internal_api_token: str = Field(
         default="change-this-token-in-production", alias="INTERNAL_API_TOKEN"
     )
+    worker_id: str = Field(default_factory=socket.gethostname, alias="WORKER_ID")
     task_pull_enabled: bool = Field(default=True, alias="TASK_PULL_ENABLED")
     # Backward compatible default pull interval (used when per-queue intervals are unset)
     task_pull_interval_seconds: int = Field(

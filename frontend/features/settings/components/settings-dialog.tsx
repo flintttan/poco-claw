@@ -7,19 +7,15 @@ import {
   ChevronRight,
   HelpCircle,
   Keyboard,
-  KeyRound,
   Languages,
   LogOut,
   Palette,
   Sparkles,
-  Server,
   SlidersHorizontal,
   User,
   X,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { useRouter } from "next/navigation";
-
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -46,8 +42,6 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useThemeMode, type ThemeMode } from "@/hooks/use-theme-mode";
 import { SettingsSidebar } from "@/features/settings/components/settings-sidebar";
 import { AccountSettingsTab } from "@/features/settings/components/tabs/account-settings-tab";
-import { ModelsSettingsTab } from "@/features/settings/components/tabs/models-settings-tab";
-import { OtherSettingsTab } from "@/features/settings/components/tabs/other-settings-tab";
 import { ShortcutsSettingsTab } from "@/features/settings/components/tabs/shortcuts-settings-tab";
 import {
   UsageSettingsTab,
@@ -57,7 +51,6 @@ import {
   useBackendPreference,
   type BackendOption,
 } from "@/features/settings/hooks/use-backend-preference";
-import { useModelProviderSettings } from "@/features/settings/hooks/use-model-provider-settings";
 import { useSettingsLanguage } from "@/features/settings/hooks/use-settings-language";
 import { useUsageAnalytics } from "@/features/settings/hooks/use-usage-analytics";
 import { formatMonthLabel } from "@/features/settings/lib/usage-analytics";
@@ -93,26 +86,15 @@ export function SettingsDialog({
 }: SettingsDialogProps) {
   const { t, i18n } = useT("translation");
   const isMobile = useIsMobile();
-  const router = useRouter();
   const { mode, setMode } = useThemeMode();
   const { backend, setBackend } = useBackendPreference();
   const { currentLanguage, changeLanguage } = useSettingsLanguage();
-  const { profile, credits, isLoading } = useUserAccount();
+  const { profile, credits, isLoading, logout } = useUserAccount();
 
   const [activeTab, setActiveTab] = React.useState<SettingsTabId>(
     tabRequest?.tab ?? "account",
   );
   const [mobileView, setMobileView] = React.useState<MobileView>("overview");
-
-  const {
-    providerConfigs,
-    isLoading: isLoadingProviders,
-    setProviderPatch,
-    saveProvider,
-    clearCustomProvider,
-  } = useModelProviderSettings({
-    enabled: open,
-  });
 
   const isUsageViewActive =
     open && (activeTab === "usage" || mobileView === "usage");
@@ -212,8 +194,6 @@ export function SettingsDialog({
   const sidebarItems = React.useMemo<SettingsSidebarItem[]>(
     () => [
       { icon: User, label: t("settings.sidebar.account"), id: "account" },
-      { icon: Server, label: t("settings.sidebar.models"), id: "models" },
-      { icon: KeyRound, label: t("settings.sidebar.other"), id: "other" },
       { icon: Activity, label: t("settings.sidebar.usage"), id: "usage" },
       {
         icon: Keyboard,
@@ -305,9 +285,9 @@ export function SettingsDialog({
   }, [open, tabRequest, isMobile]);
 
   const handleLogout = React.useCallback(() => {
-    router.push("/login");
     handleClose();
-  }, [router, handleClose]);
+    void logout();
+  }, [handleClose, logout]);
 
   const handleMobileNavigate = (view: MobileView) => {
     if (view === "overview") {
@@ -315,13 +295,7 @@ export function SettingsDialog({
       return;
     }
 
-    if (
-      view === "account" ||
-      view === "models" ||
-      view === "other" ||
-      view === "usage" ||
-      view === "shortcuts"
-    ) {
+    if (view === "account" || view === "usage" || view === "shortcuts") {
       setActiveTab(view);
     }
 
@@ -350,18 +324,6 @@ export function SettingsDialog({
       );
     }
 
-    if (activeTab === "models") {
-      return (
-        <ModelsSettingsTab
-          providers={providerConfigs}
-          isLoading={isLoadingProviders}
-          onChangeProvider={setProviderPatch}
-          onSaveProvider={saveProvider}
-          onClearProvider={clearCustomProvider}
-        />
-      );
-    }
-
     if (activeTab === "usage") {
       return (
         <UsageSettingsTab
@@ -369,10 +331,6 @@ export function SettingsDialog({
           showInlineToolbar={isMobile}
         />
       );
-    }
-
-    if (activeTab === "other") {
-      return <OtherSettingsTab />;
     }
 
     return <ShortcutsSettingsTab />;
@@ -549,10 +507,7 @@ function MobileSettingsOverview({
   const accountItems = sidebarItems.filter(
     (item) => item.id === "account" || item.id === "usage",
   );
-  const generalItems = sidebarItems.filter(
-    (item) =>
-      item.id === "models" || item.id === "other" || item.id === "shortcuts",
-  );
+  const generalItems = sidebarItems.filter((item) => item.id === "shortcuts");
 
   return (
     <div className="flex-1 space-y-5 overflow-y-auto pb-2">

@@ -13,6 +13,16 @@ export interface EnvVarUpsertInput {
   description?: string | null;
 }
 
+function getErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error) {
+    const message = error.message.trim();
+    if (message) {
+      return message;
+    }
+  }
+  return fallback;
+}
+
 export function useEnvVarsStore() {
   const { t } = useT("translation");
   const [envVars, setEnvVars] = useState<EnvVar[]>([]);
@@ -74,7 +84,7 @@ export function useEnvVarsStore() {
         }
       } catch (error) {
         console.error("[EnvVars] upsert failed", error);
-        toast.error(t("library.envVars.toasts.error"));
+        toast.error(getErrorMessage(error, t("library.envVars.toasts.error")));
       } finally {
         setSavingEnvKey(null);
       }
@@ -90,7 +100,7 @@ export function useEnvVarsStore() {
         toast.success(t("library.envVars.toasts.deleted"));
       } catch (error) {
         console.error("[EnvVars] remove failed", error);
-        toast.error(t("library.envVars.toasts.error"));
+        toast.error(getErrorMessage(error, t("library.envVars.toasts.error")));
       }
     },
     [t],
@@ -103,7 +113,7 @@ export function useEnvVarsStore() {
       toast.success(t("library.envVars.toasts.refreshed"));
     } catch (error) {
       console.error("[EnvVars] refresh failed", error);
-      toast.error(t("library.envVars.toasts.error"));
+      toast.error(getErrorMessage(error, t("library.envVars.toasts.error")));
     }
   }, [t]);
 

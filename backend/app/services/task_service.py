@@ -90,7 +90,7 @@ class TaskService:
             )
 
         allowed = set(get_allowed_model_ids(settings))
-        if value not in allowed and not provider_id and inferred_provider_id is None:
+        if value not in allowed:
             raise AppException(
                 error_code=ErrorCode.BAD_REQUEST,
                 message=f"Invalid model: {value}",
@@ -344,6 +344,11 @@ class TaskService:
                 raise AppException(
                     error_code=ErrorCode.FORBIDDEN,
                     message="Session does not belong to the user",
+                )
+            if db_session.status == "canceling":
+                raise AppException(
+                    error_code=ErrorCode.BAD_REQUEST,
+                    message="Session cancellation is still in progress",
                 )
             if project_id is not None and db_session.project_id != project_id:
                 raise AppException(

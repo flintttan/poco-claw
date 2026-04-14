@@ -107,6 +107,16 @@ class TaskCancelRequest(BaseModel):
     reason: str | None = "User canceled"
 
 
+class TaskCancelResult(BaseModel):
+    """Executor stop result for a session cancellation."""
+
+    session_id: str
+    stop_status: Literal["stopped", "not_found", "failed"]
+    matched_container_count: int = 0
+    stopped_container_count: int = 0
+    message: str | None = None
+
+
 class ContainerDeleteRequest(BaseModel):
     """Delete container request."""
 

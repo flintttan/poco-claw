@@ -541,6 +541,7 @@
   "status": {
     "pending": "Pending",
     "running": "Running",
+    "canceling": "Canceling",
     "completed": "Completed",
     "failed": "Failed",
     "canceled": "Canceled",
@@ -977,6 +978,7 @@
         "queued": "Queued",
         "claimed": "Claimed",
         "running": "Running",
+        "canceling": "Canceling",
         "completed": "Completed",
         "failed": "Failed",
         "canceled": "Canceled",
@@ -1231,11 +1233,11 @@
         "descriptionLabel": "Description",
         "setupTitle": "Connect SkillsMP to explore more skills",
         "setupDescription": "SkillsMP is a skill marketplace where you can discover reusable agent skills by popularity or search.",
-        "setupHint": "Add your SkillsMP API key in Settings > Other, then return here to browse marketplace results.",
+        "setupHint": "SkillsMP is managed by the server configuration. If it is unavailable here, ask an administrator to check the service setup.",
         "openSettings": "Open Settings",
-        "invalidKeyTitle": "Your SkillsMP API key is invalid",
-        "invalidKeyDescription": "SkillsMP rejected the current API key, so marketplace search and recommendations are unavailable.",
-        "invalidKeyHint": "Open Settings > Other, update the SkillsMP API key, then come back here to try again."
+        "invalidKeyTitle": "The current SkillsMP service credentials are invalid",
+        "invalidKeyDescription": "SkillsMP rejected the server-managed credentials, so marketplace search and recommendations are unavailable.",
+        "invalidKeyHint": "SkillsMP is managed by the server configuration. Ask an administrator to check the service credentials."
       }
     },
     "pluginsManager": {
@@ -2312,6 +2314,21 @@
       "notSupported": "Native folder picker is not supported in this browser. Please enter the path manually.",
       "resolveFailed": "Could not auto-detect the path. Please enter the host path manually.",
       "searchLimitation": "For safety, host path auto-fill only searches by the selected folder name. If multiple folders share that name, resolution can fail and you need to enter the absolute path manually."
+    }
+  },
+  "auth": {
+    "login": {
+      "title": "Sign in to Poco",
+      "subtitle": "Use Google or GitHub to continue.",
+      "google": "Continue with Google",
+      "github": "Continue with GitHub",
+      "hint": "We use a secure browser session to keep you signed in.",
+      "errors": {
+        "default": "Sign-in failed. Please try again.",
+        "provider_not_configured": "This sign-in provider is not configured yet.",
+        "invalid_oauth_state": "Your sign-in session expired. Please try again.",
+        "oauth_failed": "We could not complete sign-in. Please try again."
+      }
     }
   }
 }

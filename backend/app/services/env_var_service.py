@@ -24,6 +24,19 @@ logger = logging.getLogger(__name__)
 
 SYSTEM_USER_ID = "__system__"
 EnvVarScope = Literal["system", "user"]
+RESERVED_USER_ENV_VAR_KEYS = frozenset(
+    {
+        "ANTHROPIC_API_KEY",
+        "ANTHROPIC_BASE_URL",
+        "GLM_API_KEY",
+        "GLM_BASE_URL",
+        "MINIMAX_API_KEY",
+        "MINIMAX_BASE_URL",
+        "DEEPSEEK_API_KEY",
+        "DEEPSEEK_BASE_URL",
+        "SKILLSMP_API_KEY",
+    }
+)
 PROCESS_ENV_KEYS = (
     "ANTHROPIC_API_KEY",
     "ANTHROPIC_BASE_URL",
@@ -68,6 +81,14 @@ def _normalize_user_value(value: str) -> str:
     return v
 
 
+def _ensure_user_key_allowed(key: str) -> None:
+    if key in RESERVED_USER_ENV_VAR_KEYS:
+        raise AppException(
+            error_code=ErrorCode.BAD_REQUEST,
+            message=f"Env var key is reserved: {key}",
+        )
+
+
 def _require_regular_user_id(user_id: str) -> None:
     if user_id == SYSTEM_USER_ID:
         raise AppException(
@@ -103,8 +124,12 @@ class EnvVarService:
 
         items: list[EnvVarPublicResponse] = []
         for ev in system_vars:
+            if ev.key in RESERVED_USER_ENV_VAR_KEYS:
+                continue
             items.append(self._to_public_response(ev, is_set=self._is_set(ev)))
         for ev in user_vars:
+            if ev.key in RESERVED_USER_ENV_VAR_KEYS:
+                continue
             # User vars always have a non-empty value (enforced by create/update rules).
             items.append(self._to_public_response(ev, is_set=True))
         return items
@@ -114,6 +139,7 @@ class EnvVarService:
     ) -> EnvVarPublicResponse:
         _require_regular_user_id(user_id)
         key = _normalize_key(request.key)
+        _ensure_user_key_allowed(key)
         value = _normalize_user_value(request.value)
 
         existing = EnvVarRepository.get_by_user_and_key(db, user_id, key)
@@ -154,6 +180,7 @@ class EnvVarService:
                 error_code=ErrorCode.ENV_VAR_NOT_FOUND,
                 message=f"Env var not found: {env_var_id}",
             )
+        _ensure_user_key_allowed(env_var.key)
 
         if request.value is not None:
             value = _normalize_user_value(request.value)
@@ -203,12 +230,8 @@ class EnvVarService:
     # Internal APIs: secrets + env_map
     # ---------------------------------
 
-    def get_env_map(self, db: Session, user_id: str) -> dict[str, str]:
-        """Return env_map for config resolution: system + user (user overrides system).
-
-        Empty values are treated as "unset" and excluded from the map so that
-        `${env:KEY}` fails loudly when not configured.
-        """
+    def get_system_env_map(self, db: Session) -> dict[str, str]:
+        """Return env_map containing process env plus system-managed values only."""
         env_map = self._load_process_env_map()
 
         system_vars = EnvVarRepository.list_by_user_and_scope(
@@ -223,10 +246,22 @@ class EnvVarService:
             if value.strip():
                 env_map[item.key] = value
 
+        return env_map
+
+    def get_env_map(self, db: Session, user_id: str) -> dict[str, str]:
+        """Return env_map for config resolution: system + user (user overrides system).
+
+        Empty values are treated as "unset" and excluded from the map so that
+        `${env:KEY}` fails loudly when not configured.
+        """
+        env_map = self.get_system_env_map(db)
+
         user_vars = EnvVarRepository.list_by_user_and_scope(
             db, user_id=user_id, scope="user"
         )
         for item in user_vars:
+            if item.key in RESERVED_USER_ENV_VAR_KEYS:
+                continue
             try:
                 value = self._decrypt(item.value_ciphertext)
             except Exception:

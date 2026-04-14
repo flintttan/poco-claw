@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -116,6 +116,10 @@ class SessionCancelResponse(BaseModel):
     canceled_runs: int = 0
     canceled_queued_queries: int = 0
     expired_user_input_requests: int = 0
+    executor_cancel_status: Literal["not_required", "pending", "completed"] = (
+        "not_required"
+    )
+    executor_cancel_target_worker_id: str | None = None
     executor_cancelled: bool = False
 
 

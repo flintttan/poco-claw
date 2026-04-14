@@ -31,6 +31,12 @@ class AgentSession(Base, TimestampMixin):
             "sdk_session_id",
             "is_deleted",
         ),
+        Index(
+            "ix_agent_sessions_status_cancel_target_requested",
+            "status",
+            "cancellation_target_worker_id",
+            "cancellation_requested_at",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -70,6 +76,36 @@ class AgentSession(Base, TimestampMixin):
         index=True,
     )
     status: Mapped[str] = mapped_column(String(50), default="running", nullable=False)
+    cancellation_requested_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        index=True,
+    )
+    cancellation_completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    cancellation_target_run_id: Mapped[uuid.UUID | None] = mapped_column(
+        nullable=True,
+        index=True,
+    )
+    cancellation_target_worker_id: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+        index=True,
+    )
+    cancellation_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    cancellation_claimed_by: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+        index=True,
+    )
+    cancellation_lease_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        index=True,
+    )
+    cancellation_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_deleted: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default=text("false"), nullable=False
     )

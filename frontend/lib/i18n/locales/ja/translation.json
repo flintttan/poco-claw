@@ -541,6 +541,7 @@
   "status": {
     "pending": "待機中",
     "running": "実行中",
+    "canceling": "キャンセル中",
     "completed": "完了",
     "failed": "失敗",
     "canceled": "キャンセル済み",
@@ -977,6 +978,7 @@
         "queued": "キュー待ち",
         "claimed": "取得済み",
         "running": "実行中",
+        "canceling": "キャンセル中",
         "completed": "完了",
         "failed": "失敗",
         "canceled": "キャンセル済み",
@@ -2312,6 +2314,21 @@
       "notSupported": "お使いのブラウザはネイティブフォルダ選択に対応していません。パスを手動で入力してください。",
       "resolveFailed": "パスを自動検出できませんでした。ホストパスを手動で入力してください。",
       "searchLimitation": "安全上の理由から、ホストパスの自動補完は選択したフォルダ名だけで検索します。同名のフォルダが複数ある場合は解決に失敗することがあり、その際は絶対パスを手動で入力する必要があります。"
+    }
+  },
+  "auth": {
+    "login": {
+      "title": "Poco にサインイン",
+      "subtitle": "Google または GitHub で続行します。",
+      "google": "Google で続行",
+      "github": "GitHub で続行",
+      "hint": "安全なブラウザーセッションでログイン状態を維持します。",
+      "errors": {
+        "default": "サインインに失敗しました。もう一度お試しください。",
+        "provider_not_configured": "このサインイン方法はまだ設定されていません。",
+        "invalid_oauth_state": "サインインセッションの有効期限が切れました。もう一度お試しください。",
+        "oauth_failed": "サインインを完了できませんでした。もう一度お試しください。"
+      }
     }
   }
 }

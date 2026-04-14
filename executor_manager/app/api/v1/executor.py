@@ -6,13 +6,14 @@ from app.schemas.task import (
     ContainerDeleteRequest,
     ContainerStatsResponse,
     TaskCancelRequest,
+    TaskCancelResult,
 )
 from app.scheduler.task_dispatcher import TaskDispatcher
 
 router = APIRouter(prefix="/executor", tags=["executor"])
 
 
-@router.post("/cancel", response_model=ResponseSchema[dict])
+@router.post("/cancel", response_model=ResponseSchema[TaskCancelResult])
 async def cancel_task(request: TaskCancelRequest) -> JSONResponse:
     """Cancel running task and delete container.
 
@@ -23,11 +24,11 @@ async def cancel_task(request: TaskCancelRequest) -> JSONResponse:
         Success response with session_id and status
     """
     container_pool = TaskDispatcher.get_container_pool()
-    await container_pool.cancel_task(request.session_id)
+    result = await container_pool.cancel_task(request.session_id)
 
     return Response.success(
-        data={"session_id": request.session_id, "status": "canceled"},
-        message="Task canceled successfully",
+        data=result,
+        message="Task cancel request processed",
     )
 
 

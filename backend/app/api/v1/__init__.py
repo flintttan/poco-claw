@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from app.api.v1 import (
+    auth,
     attachments,
     audio,
     callback,
@@ -18,6 +19,7 @@ from app.api.v1 import (
     internal_slash_commands,
     internal_mcp_config,
     internal_scheduled_tasks,
+    internal_sessions,
     internal_skill_config,
     internal_subagents,
     internal_user_input_requests,
@@ -53,6 +55,7 @@ from app.core.settings import get_settings
 from app.schemas.response import Response
 
 api_v1_router = APIRouter()
+api_v1_router.include_router(auth.router)
 api_v1_router.include_router(sessions.router)
 api_v1_router.include_router(session_queue.router)
 api_v1_router.include_router(tasks.router)
@@ -81,6 +84,7 @@ api_v1_router.include_router(internal_skills.router)
 api_v1_router.include_router(internal_mcp_config.router)
 api_v1_router.include_router(internal_skill_config.router)
 api_v1_router.include_router(internal_scheduled_tasks.router)
+api_v1_router.include_router(internal_sessions.router)
 api_v1_router.include_router(internal_user_input_requests.router)
 api_v1_router.include_router(internal_slash_commands.router)
 api_v1_router.include_router(internal_subagents.router)

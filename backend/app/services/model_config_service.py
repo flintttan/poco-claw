@@ -1,26 +1,14 @@
-import os
 from dataclasses import dataclass
 
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.core.errors.error_codes import ErrorCode
-from app.core.errors.exceptions import AppException
 from app.core.settings import Settings, get_settings
-from app.models.env_var import UserEnvVar
-from app.models.model_provider_setting import UserModelProviderSetting
-from app.repositories.env_var_repository import EnvVarRepository
-from app.repositories.model_provider_setting_repository import (
-    ModelProviderSettingRepository,
-)
 from app.schemas.model_config import (
     ModelConfigResponse,
     ModelDefinitionResponse,
     ModelProviderResponse,
-    ProviderModelSettingsUpsertRequest,
 )
-from app.services.env_var_service import SYSTEM_USER_ID
-from app.utils.crypto import decrypt_value
+from app.services.env_var_service import EnvVarService
 
 
 @dataclass(frozen=True)
@@ -30,6 +18,8 @@ class ProviderSpec:
     api_key_env_key: str
     base_url_env_key: str
     default_base_url: str
+    api_key_settings_fields: tuple[str, ...] = ()
+    base_url_settings_fields: tuple[str, ...] = ()
     known_models: tuple[tuple[str, str], ...] = ()
     legacy_api_key_env_keys: tuple[str, ...] = ()
     legacy_base_url_env_keys: tuple[str, ...] = ()
@@ -42,6 +32,8 @@ PROVIDER_SPECS: tuple[ProviderSpec, ...] = (
         api_key_env_key="ANTHROPIC_API_KEY",
         base_url_env_key="ANTHROPIC_BASE_URL",
         default_base_url="https://api.anthropic.com",
+        api_key_settings_fields=("anthropic_api_key",),
+        base_url_settings_fields=("anthropic_base_url",),
         known_models=(
             ("claude-sonnet-4-6", "Claude Sonnet 4.6"),
             ("claude-opus-4-6", "Claude Opus 4.6"),
@@ -144,24 +136,6 @@ def get_allowed_model_ids(settings: Settings | None = None) -> list[str]:
     return ordered
 
 
-def _decrypt_ciphertext(ciphertext: str, secret_key: str) -> str:
-    if not ciphertext:
-        return ""
-    return decrypt_value(ciphertext, secret_key).strip()
-
-
-def _normalize_model_ids(model_ids: list[str] | None) -> list[str]:
-    ordered: list[str] = []
-    seen: set[str] = set()
-    for item in model_ids or []:
-        clean = (item or "").strip()
-        if not clean or clean in seen:
-            continue
-        seen.add(clean)
-        ordered.append(clean)
-    return ordered
-
-
 def _build_model_definition(
     model_id: str,
     provider_id: str,
@@ -181,56 +155,33 @@ def _first_non_empty(mapping: dict[str, str], keys: tuple[str, ...]) -> str:
     return ""
 
 
-def _first_non_empty_process_env(keys: tuple[str, ...]) -> str:
-    for key in keys:
-        value = (os.getenv(key) or "").strip()
-        if value:
-            return value
-    return ""
-
-
 class ModelConfigService:
     def __init__(self) -> None:
         self.settings = get_settings()
+        self.env_var_service = EnvVarService()
 
     def get_model_config(self, db: Session, user_id: str) -> ModelConfigResponse:
-        provider_model_settings = self._load_provider_model_settings(db, user_id)
-        user_env_values, system_env_values = self._load_provider_env_values(db, user_id)
+        del user_id
 
         models: list[ModelDefinitionResponse] = []
-        seen_keys: set[tuple[str, str]] = set()
-
-        def push_model(model_id: str | None, provider_id: str | None = None) -> None:
-            clean = (model_id or "").strip()
-            resolved_provider_id = (
-                provider_id or infer_provider_id(clean) or ""
-            ).strip()
-            if (
-                not clean
-                or not resolved_provider_id
-                or resolved_provider_id not in PROVIDER_SPEC_MAP
-            ):
-                return
-            key = (resolved_provider_id, clean)
-            if key in seen_keys:
-                return
-            seen_keys.add(key)
-            models.append(_build_model_definition(clean, resolved_provider_id))
-
-        push_model(self.settings.default_model)
-        for item in self.settings.model_list or []:
-            push_model(item)
-        for provider_id, model_ids in provider_model_settings.items():
-            for model_id in model_ids:
-                push_model(model_id, provider_id)
+        provider_model_ids: dict[str, list[str]] = {}
+        for model_id in get_allowed_model_ids(self.settings):
+            provider_id = infer_provider_id(model_id)
+            if not provider_id:
+                continue
+            models.append(_build_model_definition(model_id, provider_id))
+            provider_model_ids.setdefault(provider_id, []).append(model_id)
 
         providers: list[ModelProviderResponse] = []
+        system_env_values = self.env_var_service.get_system_env_map(db)
         for spec in PROVIDER_SPECS:
+            selected_model_ids = provider_model_ids.get(spec.provider_id, [])
+            if not selected_model_ids:
+                continue
             provider_state = self._build_provider_response(
                 spec=spec,
-                user_env_values=user_env_values,
                 system_env_values=system_env_values,
-                selected_model_ids=provider_model_settings.get(spec.provider_id, []),
+                selected_model_ids=selected_model_ids,
             )
             providers.append(provider_state)
 
@@ -242,94 +193,23 @@ class ModelConfigService:
             providers=providers,
         )
 
-    def upsert_provider_models(
-        self,
-        db: Session,
-        user_id: str,
-        provider_id: str,
-        request: ProviderModelSettingsUpsertRequest,
-    ) -> ModelProviderResponse:
-        spec = self._get_provider_spec(provider_id)
-        model_ids = _normalize_model_ids(request.model_ids)
-
-        setting = ModelProviderSettingRepository.get_by_user_and_provider(
-            db,
-            user_id=user_id,
-            provider_id=provider_id,
-        )
-
-        if not model_ids:
-            if setting:
-                ModelProviderSettingRepository.delete(db, setting)
-                db.commit()
-            user_env_values, system_env_values = self._load_provider_env_values(
-                db, user_id
-            )
-            return self._build_provider_response(
-                spec=spec,
-                user_env_values=user_env_values,
-                system_env_values=system_env_values,
-                selected_model_ids=[],
-            )
-
-        if not setting:
-            setting = UserModelProviderSetting(
-                user_id=user_id,
-                provider_id=provider_id,
-                model_ids=model_ids,
-            )
-            try:
-                ModelProviderSettingRepository.create(db, setting)
-                db.commit()
-                db.refresh(setting)
-            except IntegrityError as exc:
-                db.rollback()
-                raise AppException(
-                    error_code=ErrorCode.DATABASE_ERROR,
-                    message="Failed to save provider models",
-                ) from exc
-        else:
-            setting.model_ids = model_ids
-            db.commit()
-            db.refresh(setting)
-
-        user_env_values, system_env_values = self._load_provider_env_values(db, user_id)
-        return self._build_provider_response(
-            spec=spec,
-            user_env_values=user_env_values,
-            system_env_values=system_env_values,
-            selected_model_ids=model_ids,
-        )
-
     def _build_provider_response(
         self,
         spec: ProviderSpec,
-        user_env_values: dict[str, str],
         system_env_values: dict[str, str],
         selected_model_ids: list[str],
     ) -> ModelProviderResponse:
         api_key_candidates = (spec.api_key_env_key, *spec.legacy_api_key_env_keys)
         base_url_candidates = (spec.base_url_env_key, *spec.legacy_base_url_env_keys)
+        system_key = _first_non_empty(
+            system_env_values, api_key_candidates
+        ) or self._get_first_settings_value(spec.api_key_settings_fields)
+        credential_state = "system" if system_key else "none"
 
-        user_key = _first_non_empty(user_env_values, api_key_candidates)
-        process_key = _first_non_empty_process_env(api_key_candidates)
-
-        if user_key:
-            credential_state = "user"
-        elif _first_non_empty(system_env_values, api_key_candidates) or process_key:
-            credential_state = "system"
-        else:
-            credential_state = "none"
-
-        user_base_url = _first_non_empty(user_env_values, base_url_candidates)
-        system_base_url = _first_non_empty(system_env_values, base_url_candidates)
-        process_base_url = _first_non_empty_process_env(base_url_candidates)
-
-        if user_base_url:
-            effective_base_url = user_base_url
-            base_url_source = "user"
-        elif system_base_url or process_base_url:
-            effective_base_url = system_base_url or process_base_url
+        effective_base_url = _first_non_empty(
+            system_env_values, base_url_candidates
+        ) or self._get_first_settings_value(spec.base_url_settings_fields)
+        if effective_base_url:
             base_url_source = "system"
         else:
             effective_base_url = spec.default_base_url
@@ -353,65 +233,10 @@ class ModelConfigService:
             models=selected_models,
         )
 
-    def _get_provider_spec(self, provider_id: str) -> ProviderSpec:
-        spec = PROVIDER_SPEC_MAP.get(provider_id)
-        if not spec:
-            raise AppException(
-                error_code=ErrorCode.NOT_FOUND,
-                message=f"Unknown provider: {provider_id}",
-            )
-        return spec
-
-    def _load_provider_env_values(
-        self,
-        db: Session,
-        user_id: str,
-    ) -> tuple[dict[str, str], dict[str, str]]:
-        relevant_env_keys = set()
-        for spec in PROVIDER_SPECS:
-            relevant_env_keys.add(spec.api_key_env_key)
-            relevant_env_keys.update(spec.legacy_api_key_env_keys)
-            relevant_env_keys.add(spec.base_url_env_key)
-            relevant_env_keys.update(spec.legacy_base_url_env_keys)
-
-        system_items = self._load_env_values(
-            EnvVarRepository.list_by_user_and_scope(
-                db, user_id=SYSTEM_USER_ID, scope="system"
-            ),
-            relevant_env_keys,
-        )
-        user_items = self._load_env_values(
-            EnvVarRepository.list_by_user_and_scope(db, user_id=user_id, scope="user"),
-            relevant_env_keys,
-        )
-        return user_items, system_items
-
-    def _load_provider_model_settings(
-        self,
-        db: Session,
-        user_id: str,
-    ) -> dict[str, list[str]]:
-        settings = ModelProviderSettingRepository.list_by_user_id(db, user_id)
-        return {
-            setting.provider_id: _normalize_model_ids(setting.model_ids)
-            for setting in settings
-            if setting.provider_id in PROVIDER_SPEC_MAP
-        }
-
-    def _load_env_values(
-        self,
-        env_vars: list[UserEnvVar],
-        relevant_keys: set[str],
-    ) -> dict[str, str]:
-        values: dict[str, str] = {}
-        for item in env_vars:
-            if item.key not in relevant_keys:
-                continue
-            try:
-                values[item.key] = _decrypt_ciphertext(
-                    item.value_ciphertext,
-                    self.settings.secret_key,
-                )
-            except Exception:
-                continue
-        return values
+    def _get_first_settings_value(self, field_names: tuple[str, ...]) -> str:
+        for field_name in field_names:
+            value = getattr(self.settings, field_name, None)
+            normalized = str(value or "").strip()
+            if normalized:
+                return normalized
+        return ""

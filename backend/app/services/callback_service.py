@@ -397,7 +397,7 @@ class CallbackService:
                 message="Session not found yet",
             )
 
-        if db_session.status == "canceled":
+        if db_session.status in {"canceling", "canceled"}:
             return CallbackResponse(
                 session_id=str(db_session.id),
                 status=db_session.status,

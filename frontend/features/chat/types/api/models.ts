@@ -29,7 +29,3 @@ export interface ModelConfigResponse {
   models: ModelDefinition[];
   providers: ModelProvider[];
 }
-
-export interface ProviderModelSettingsUpdateInput {
-  model_ids: string[];
-}

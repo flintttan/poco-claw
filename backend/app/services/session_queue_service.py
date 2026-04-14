@@ -51,6 +51,17 @@ class SessionQueueService:
         db_session.workspace_export_status = None
 
     @staticmethod
+    def clear_cancellation_state(db_session: AgentSession) -> None:
+        db_session.cancellation_requested_at = None
+        db_session.cancellation_completed_at = None
+        db_session.cancellation_target_run_id = None
+        db_session.cancellation_target_worker_id = None
+        db_session.cancellation_reason = None
+        db_session.cancellation_claimed_by = None
+        db_session.cancellation_lease_expires_at = None
+        db_session.cancellation_error = None
+
+    @staticmethod
     def _move_item_to_front(
         db: Session,
         *,
@@ -198,6 +209,7 @@ class SessionQueueService:
         normalized_prompt = self._normalize_prompt(prompt)
         if schedule_mode == "immediate":
             self.clear_execution_state(db_session)
+        self.clear_cancellation_state(db_session)
         db_session.config_snapshot = self.extract_session_config(run_config_snapshot)
 
         user_message_content = {

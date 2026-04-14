@@ -40,9 +40,3 @@ class ModelConfigResponse(BaseModel):
     mem0_enabled: bool = False
     models: list[ModelDefinitionResponse] = Field(default_factory=list)
     providers: list[ModelProviderResponse] = Field(default_factory=list)
-
-
-class ProviderModelSettingsUpsertRequest(BaseModel):
-    """Persist the provider-scoped model list for the current user."""
-
-    model_ids: list[str] = Field(default_factory=list)

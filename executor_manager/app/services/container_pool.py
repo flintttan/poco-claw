@@ -10,6 +10,7 @@ from app.core.errors.error_codes import ErrorCode
 from app.core.errors.exceptions import AppException
 from app.core.settings import get_settings
 from app.schemas.filesystem import MountResolutionResult
+from app.schemas.task import TaskCancelResult
 from app.services.local_mount_service import LocalMountService
 from app.services.workspace_manager import WorkspaceManager
 
@@ -628,7 +629,7 @@ class ContainerPool:
             # Best-effort: the container might have already been removed.
             pass
 
-    async def cancel_task(self, session_id: str) -> None:
+    async def cancel_task(self, session_id: str) -> TaskCancelResult:
         """Cancel task and stop the executor container.
 
         Note: container bookkeeping is in-memory. When the service restarts or runs with
@@ -692,8 +693,16 @@ class ContainerPool:
                 "cancel_task_no_container_found",
                 extra={"session_id": session_id, "container_id": container_id},
             )
-            return
+            return TaskCancelResult(
+                session_id=session_id,
+                stop_status="not_found",
+                matched_container_count=0,
+                stopped_container_count=0,
+                message="No running executor container was found for this session",
+            )
 
+        stop_errors: list[str] = []
+        stopped_count = 0
         for container in containers_to_stop:
             labels = getattr(container, "labels", None) or {}
             logical_id = labels.get("container_id")
@@ -704,6 +713,7 @@ class ContainerPool:
                     session_id=session_id,
                 )
                 container.stop(timeout=10)
+                stopped_count += 1
                 logger.info(
                     "container_stopped",
                     extra={
@@ -715,8 +725,9 @@ class ContainerPool:
                 )
             except docker.errors.NotFound:
                 # Best-effort: the container may have already been removed (auto_remove=True).
-                pass
+                stopped_count += 1
             except Exception as e:
+                stop_errors.append(str(e))
                 logger.error(
                     "container_stop_failed",
                     extra={
@@ -738,6 +749,22 @@ class ContainerPool:
                 ]
                 for sid in bound_sessions:
                     self.session_to_container.pop(sid, None)
+
+        if stop_errors:
+            return TaskCancelResult(
+                session_id=session_id,
+                stop_status="failed",
+                matched_container_count=len(containers_to_stop),
+                stopped_container_count=stopped_count,
+                message="; ".join(stop_errors),
+            )
+
+        return TaskCancelResult(
+            session_id=session_id,
+            stop_status="stopped",
+            matched_container_count=len(containers_to_stop),
+            stopped_container_count=stopped_count,
+        )
 
     @staticmethod
     def _log_mount_release(

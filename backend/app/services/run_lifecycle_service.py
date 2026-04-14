@@ -38,7 +38,7 @@ class RunLifecycleService:
         if not db_session:
             return None
 
-        if db_run.status in self.TERMINAL_STATUSES:
+        if db_run.status in self.TERMINAL_STATUSES or db_run.status == "canceling":
             return db_session
 
         now = datetime.now(timezone.utc)
@@ -49,7 +49,7 @@ class RunLifecycleService:
             db_run.started_at = now
         db_run.lease_expires_at = None
 
-        if db_session.status != "canceled":
+        if db_session.status not in {"canceled", "canceling"}:
             db_session.status = "running"
 
         self._sync_scheduled_task_last_status(db, db_run)

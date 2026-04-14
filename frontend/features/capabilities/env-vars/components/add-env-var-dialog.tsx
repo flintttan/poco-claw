@@ -139,7 +139,7 @@ export function AddEnvVarDialog({
                 id="env-key"
                 value={key}
                 onChange={(e) => setKey(e.target.value)}
-                placeholder="ANTHROPIC_API_KEY"
+                placeholder="MY_SERVICE_TOKEN"
                 autoCapitalize="characters"
                 disabled={isSaving || isKeyReadOnly}
                 className="font-mono"

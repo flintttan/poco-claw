@@ -10,6 +10,22 @@ from app.schemas.response import Response
 logger = logging.getLogger(__name__)
 
 
+def _status_code_for_app_exception(exc: AppException) -> int:
+    if exc.error_code == ErrorCode.UNAUTHORIZED:
+        return 401
+    if exc.error_code == ErrorCode.FORBIDDEN:
+        return 403
+    if exc.error_code == ErrorCode.NOT_FOUND:
+        return 404
+    if exc.error_code in {
+        ErrorCode.INTERNAL_ERROR,
+        ErrorCode.DATABASE_ERROR,
+        ErrorCode.EXTERNAL_SERVICE_ERROR,
+    }:
+        return 500
+    return 400
+
+
 def setup_exception_handlers(app: FastAPI, *, debug: bool) -> None:
     @app.exception_handler(AppException)
     async def app_exception_handler(
@@ -19,7 +35,7 @@ def setup_exception_handlers(app: FastAPI, *, debug: bool) -> None:
             code=exc.code,
             message=exc.message,
             data=exc.details,
-            status_code=400,
+            status_code=_status_code_for_app_exception(exc),
         )
 
     @app.exception_handler(HTTPException)

@@ -23,6 +23,7 @@ from app.schemas.scheduled_task import (
     ScheduledTaskTriggerResponse,
     ScheduledTaskUpdateRequest,
 )
+from app.services.session_queue_service import SessionQueueService
 from app.services.task_service import TaskService
 
 logger = logging.getLogger(__name__)
@@ -402,6 +403,8 @@ class ScheduledTaskService:
                     error_code=ErrorCode.NOT_FOUND,
                     message=f"Session not found: {task.session_id}",
                 )
+            if db_session.status == "canceling":
+                return None
             session_id = db_session.id
         else:
             # Create a fresh session/workspace for this run.
@@ -430,6 +433,7 @@ class ScheduledTaskService:
                 return None
 
         # Clear previous execution state so the UI doesn't show stale file changes.
+        SessionQueueService.clear_cancellation_state(db_session)
         db_session.state_patch = {}
         db_session.status = "pending"
 

@@ -28,6 +28,16 @@ class Settings(BaseSettings):
     )
 
     secret_key: str = Field(default="change-this-secret-key-in-production")
+    auth_cookie_name: str = Field(default="poco_session", alias="AUTH_COOKIE_NAME")
+    auth_cookie_secure: bool = Field(default=False, alias="AUTH_COOKIE_SECURE")
+    auth_session_ttl_days: int = Field(default=30, alias="AUTH_SESSION_TTL_DAYS")
+    oauth_session_cookie_name: str = Field(
+        default="poco_oauth", alias="OAUTH_SESSION_COOKIE_NAME"
+    )
+    google_client_id: str | None = Field(default=None, alias="GOOGLE_CLIENT_ID")
+    google_client_secret: str | None = Field(default=None, alias="GOOGLE_CLIENT_SECRET")
+    github_client_id: str | None = Field(default=None, alias="GITHUB_CLIENT_ID")
+    github_client_secret: str | None = Field(default=None, alias="GITHUB_CLIENT_SECRET")
     internal_api_token: str = Field(
         default="change-this-token-in-production", alias="INTERNAL_API_TOKEN"
     )

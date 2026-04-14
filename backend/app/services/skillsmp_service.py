@@ -37,7 +37,7 @@ class SkillsMpService:
         return base_url
 
     def _resolve_api_key(self, db: Session, user_id: str) -> str:
-        env_map = self.env_var_service.get_env_map(db, user_id=user_id)
+        env_map = self.env_var_service.get_system_env_map(db)
         api_key = (
             env_map.get("SKILLSMP_API_KEY") or self.settings.skillsmp_api_key or ""
         ).strip()
@@ -51,7 +51,7 @@ class SkillsMpService:
     def get_marketplace_status(
         self, db: Session, user_id: str
     ) -> SkillsMpMarketplaceStatusResponse:
-        env_map = self.env_var_service.get_env_map(db, user_id=user_id)
+        env_map = self.env_var_service.get_system_env_map(db)
         configured = bool(
             (
                 env_map.get("SKILLSMP_API_KEY") or self.settings.skillsmp_api_key or ""

@@ -152,7 +152,7 @@ class RunService:
                 message=f"Run not found: {run_id}",
             )
 
-        if db_run.status in ["completed", "failed", "canceled"]:
+        if db_run.status in ["completed", "failed", "canceled", "canceling"]:
             return RunResponse.model_validate(db_run)
 
         if db_run.status == "running":
@@ -203,7 +203,7 @@ class RunService:
                 message=f"Run not found: {run_id}",
             )
 
-        if db_run.status in ["completed", "failed", "canceled"]:
+        if db_run.status in ["completed", "failed", "canceled", "canceling"]:
             return RunResponse.model_validate(db_run)
 
         if db_run.claimed_by and db_run.claimed_by != worker_id:

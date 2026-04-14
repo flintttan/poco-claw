@@ -1,11 +1,9 @@
 "use client";
 
 import * as React from "react";
-import { KeyRound, Loader2, Settings2, Sparkles } from "lucide-react";
+import { KeyRound, Loader2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 
-import { useAppShell } from "@/components/shell/app-shell-context";
-import { Button } from "@/components/ui/button";
 import {
   Empty,
   EmptyContent,
@@ -68,7 +66,6 @@ function isSkillsMarketplaceInvalidKeyError(error: unknown): boolean {
 
 export function SkillsMarketplacePageClient() {
   const { t } = useT("translation");
-  const { openSettings } = useAppShell();
   const [searchQuery, setSearchQuery] = React.useState("");
   const [isSemanticSearch, setIsSemanticSearch] = React.useState(false);
   const [recommendations, setRecommendations] = React.useState<
@@ -339,10 +336,6 @@ export function SkillsMarketplacePageClient() {
     [t],
   );
 
-  const openMarketplaceSettings = React.useCallback(() => {
-    openSettings("other");
-  }, [openSettings]);
-
   const handleDialogClose = React.useCallback(() => {
     setImportDialogOpen(false);
     setInitialDiscoverResponse(null);
@@ -390,14 +383,6 @@ export function SkillsMarketplacePageClient() {
                   <p className="text-sm leading-6 text-muted-foreground">
                     {t("library.skillsImport.marketplace.setupHint")}
                   </p>
-                  <Button
-                    type="button"
-                    onClick={openMarketplaceSettings}
-                    className="min-w-44"
-                  >
-                    <Settings2 className="size-4" />
-                    {t("library.skillsImport.marketplace.openSettings")}
-                  </Button>
                 </EmptyContent>
               </Empty>
             ) : marketplaceErrorState === "invalidKey" ? (
@@ -422,14 +407,6 @@ export function SkillsMarketplacePageClient() {
                   <p className="text-sm leading-6 text-muted-foreground">
                     {t("library.skillsImport.marketplace.invalidKeyHint")}
                   </p>
-                  <Button
-                    type="button"
-                    onClick={openMarketplaceSettings}
-                    className="min-w-44"
-                  >
-                    <Settings2 className="size-4" />
-                    {t("library.skillsImport.marketplace.openSettings")}
-                  </Button>
                 </EmptyContent>
               </Empty>
             ) : (

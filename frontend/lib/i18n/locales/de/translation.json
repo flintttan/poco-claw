@@ -541,6 +541,7 @@
   "status": {
     "pending": "Ausstehend",
     "running": "Läuft",
+    "canceling": "Wird abgebrochen",
     "completed": "Abgeschlossen",
     "failed": "Fehlgeschlagen",
     "canceled": "Abgebrochen",
@@ -977,6 +978,7 @@
         "queued": "In Warteschlange",
         "claimed": "Gepuffert",
         "running": "Läuft",
+        "canceling": "Wird abgebrochen",
         "completed": "Abgeschlossen",
         "failed": "Fehlgeschlagen",
         "canceled": "Abgebrochen",
@@ -2312,6 +2314,21 @@
       "notSupported": "Der native Ordnerwähler wird in diesem Browser nicht unterstützt. Bitte gib den Pfad manuell ein.",
       "resolveFailed": "Der Pfad konnte nicht automatisch erkannt werden. Bitte gib den Hostpfad manuell ein.",
       "searchLimitation": "Aus Sicherheitsgründen sucht das automatische Ausfüllen des Hostpfads nur nach dem ausgewählten Ordnernamen. Wenn mehrere Ordner denselben Namen haben, kann die Auflösung fehlschlagen und du musst den absoluten Pfad manuell eingeben."
+    }
+  },
+  "auth": {
+    "login": {
+      "title": "Bei Poco anmelden",
+      "subtitle": "Mit Google oder GitHub fortfahren.",
+      "google": "Mit Google fortfahren",
+      "github": "Mit GitHub fortfahren",
+      "hint": "Wir verwenden eine sichere Browser-Sitzung, damit Sie angemeldet bleiben.",
+      "errors": {
+        "default": "Anmeldung fehlgeschlagen. Bitte versuchen Sie es erneut.",
+        "provider_not_configured": "Dieser Anmeldeanbieter ist noch nicht konfiguriert.",
+        "invalid_oauth_state": "Ihre Anmeldesitzung ist abgelaufen. Bitte versuchen Sie es erneut.",
+        "oauth_failed": "Die Anmeldung konnte nicht abgeschlossen werden. Bitte versuchen Sie es erneut."
+      }
     }
   }
 }

@@ -13,6 +13,7 @@ class RunStatus(str, Enum):
     QUEUED = "queued"
     CLAIMED = "claimed"
     RUNNING = "running"
+    CANCELING = "canceling"
     COMPLETED = "completed"
     FAILED = "failed"
     CANCELED = "canceled"

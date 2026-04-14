@@ -11,8 +11,8 @@ from app.models.agent_session import AgentSession
 class RunRepository:
     """Data access layer for agent runs."""
 
-    UNFINISHED_STATUSES = ("queued", "claimed", "running")
-    BLOCKING_STATUSES = ("claimed", "running")
+    UNFINISHED_STATUSES = ("queued", "claimed", "running", "canceling")
+    BLOCKING_STATUSES = ("claimed", "running", "canceling")
     TERMINAL_STATUSES = ("completed", "failed", "canceled")
 
     @staticmethod
@@ -20,7 +20,8 @@ class RunRepository:
         return case(
             (AgentRun.status == "running", 0),
             (AgentRun.status == "claimed", 1),
-            else_=2,
+            (AgentRun.status == "canceling", 2),
+            else_=3,
         )
 
     @staticmethod
@@ -214,6 +215,7 @@ class RunRepository:
             .select_from(AgentSession)
             .where(AgentSession.id == AgentRun.session_id)
             .where(AgentSession.is_deleted.is_(False))
+            .where(AgentSession.status.not_in(["canceling", "canceled"]))
         )
 
         stmt = (

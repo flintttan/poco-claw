@@ -1,7 +1,5 @@
 import asyncio
 import logging
-import os
-import socket
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -56,9 +54,10 @@ class RunPullService:
         self.slash_command_stager = SlashCommandStager()
         self.subagent_stager = SubAgentStager()
 
-        self.worker_id = f"{socket.gethostname()}:{os.getpid()}"
+        self.worker_id = (self.settings.worker_id or "").strip() or "default-worker"
         self._semaphore = asyncio.Semaphore(self.settings.max_concurrent_tasks)
         self._tasks: set[asyncio.Task[None]] = set()
+        self._cancellation_tasks: set[asyncio.Task[None]] = set()
         self._shutdown = False
         self._logged_started = False
         self._windows_until: dict[str, datetime] = {}
@@ -153,6 +152,9 @@ class RunPullService:
             )
             self._logged_started = True
 
+        cancellation_lease_seconds = max(5, min(60, lease_seconds))
+        await self._poll_cancellations(lease_seconds=cancellation_lease_seconds)
+
         while not self._shutdown and not self._semaphore.locked():
             await self._semaphore.acquire()
 
@@ -199,6 +201,7 @@ class RunPullService:
     async def shutdown(self) -> None:
         """Request shutdown and cancel inflight dispatch tasks."""
         self._shutdown = True
+        await self._drain_cancellation_tasks()
         await self._drain_tasks()
 
     def _on_task_done(self, task: asyncio.Task[None]) -> None:
@@ -219,6 +222,91 @@ class RunPullService:
             t.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
         self._tasks.clear()
+
+    def _on_cancellation_task_done(self, task: asyncio.Task[None]) -> None:
+        self._cancellation_tasks.discard(task)
+        try:
+            exc = task.exception()
+        except asyncio.CancelledError:
+            return
+        if exc:
+            logger.error(f"Session cancellation task failed: {exc}")
+
+    async def _drain_cancellation_tasks(self) -> None:
+        if not self._cancellation_tasks:
+            return
+        tasks = list(self._cancellation_tasks)
+        for t in tasks:
+            t.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        self._cancellation_tasks.clear()
+
+    async def _poll_cancellations(self, *, lease_seconds: int) -> None:
+        while not self._shutdown:
+            try:
+                claim = await self.backend_client.claim_session_cancellation(
+                    worker_id=self.worker_id,
+                    lease_seconds=lease_seconds,
+                )
+            except Exception as e:
+                logger.error(
+                    "Failed to claim session cancellation: %s: %r",
+                    type(e).__name__,
+                    e,
+                )
+                return
+
+            if not claim:
+                return
+
+            task = asyncio.create_task(self._handle_cancellation_claim(claim))
+            self._cancellation_tasks.add(task)
+            task.add_done_callback(self._on_cancellation_task_done)
+
+    async def _handle_cancellation_claim(self, claim: dict[str, Any]) -> None:
+        session_id = str(claim.get("session_id") or "").strip()
+        if not session_id:
+            logger.error(f"Invalid session cancellation payload: {claim}")
+            return
+
+        if self.container_pool is None:
+            self.container_pool = TaskDispatcher.get_container_pool()
+
+        try:
+            result = await self.container_pool.cancel_task(session_id)
+        except Exception as e:
+            logger.exception(
+                "Failed to stop executor for session cancellation",
+                extra={"session_id": session_id, "worker_id": self.worker_id},
+            )
+            await self.backend_client.complete_session_cancellation(
+                session_id=session_id,
+                worker_id=self.worker_id,
+                stop_status="failed",
+                message=str(e),
+            )
+            return
+
+        await self.backend_client.complete_session_cancellation(
+            session_id=session_id,
+            worker_id=self.worker_id,
+            stop_status=result.stop_status,
+            message=result.message,
+        )
+
+    async def _session_stop_requested(self, session_id: str) -> bool:
+        try:
+            session = await self.backend_client.get_session(session_id)
+        except Exception as e:
+            logger.warning(
+                "Failed to fetch session status before dispatch: %s: %r",
+                type(e).__name__,
+                e,
+            )
+            return False
+
+        status = str(session.get("status") or "").strip().lower()
+        return status in {"canceling", "canceled"}
 
     async def _handle_claim(self, claim: dict[str, Any]) -> None:
         dispatch_started = time.perf_counter()
@@ -413,6 +501,13 @@ class RunPullService:
                     f"Failed to stage subagents for session {session_id}: {exc}"
                 )
 
+            if await self._session_stop_requested(session_id):
+                logger.info(
+                    "run_dispatch_aborted_before_container",
+                    extra={"worker_id": self.worker_id, **ctx},
+                )
+                return
+
             step_started = time.perf_counter()
             browser_enabled = bool(resolved_config.get("browser_enabled"))
             if self.container_pool is None:
@@ -441,6 +536,14 @@ class RunPullService:
                 },
             )
 
+            if await self._session_stop_requested(session_id):
+                await self.container_pool.cancel_task(session_id)
+                logger.info(
+                    "run_dispatch_aborted_after_container",
+                    extra={"worker_id": self.worker_id, **ctx},
+                )
+                return
+
             step_started = time.perf_counter()
             await self.executor_client.execute_task(
                 executor_url=executor_url,
@@ -463,6 +566,13 @@ class RunPullService:
                     **ctx,
                 },
             )
+            if await self._session_stop_requested(session_id):
+                await self.container_pool.cancel_task(session_id)
+                logger.info(
+                    "run_dispatch_aborted_after_execute",
+                    extra={"worker_id": self.worker_id, **ctx},
+                )
+                return
             try:
                 step_started = time.perf_counter()
                 await self.backend_client.start_run(

@@ -1,9 +1,10 @@
 import logging
 import uuid
 from copy import deepcopy
-from datetime import datetime, timezone
-from typing import TypeVar
+from datetime import datetime, timedelta, timezone
+from typing import Any, TypeVar
 
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.core.errors.error_codes import ErrorCode
@@ -21,8 +22,17 @@ from app.repositories.session_repository import SessionRepository
 from app.repositories.tool_execution_repository import ToolExecutionRepository
 from app.repositories.usage_log_repository import UsageLogRepository
 from app.repositories.user_input_request_repository import UserInputRequestRepository
-from app.schemas.session import SessionCreateRequest, SessionUpdateRequest
+from app.schemas.internal_session import (
+    SessionCancellationClaimResponse,
+    SessionCancellationCompleteResponse,
+)
+from app.schemas.session import (
+    SessionCancelResponse,
+    SessionCreateRequest,
+    SessionUpdateRequest,
+)
 from app.schemas.task import TaskEnqueueResponse
+from app.services.session_queue_service import SessionQueueService
 from app.services.task_service import TaskService
 
 logger = logging.getLogger(__name__)
@@ -32,6 +42,9 @@ task_service = TaskService()
 
 class SessionService:
     """Service layer for session management."""
+
+    ACTIVE_CANCELLATION_RUN_STATUSES = {"claimed", "running", "canceling"}
+    QUEUED_RUN_STATUSES = {"queued"}
 
     @staticmethod
     def _deepcopy_json(value: JsonValueT) -> JsonValueT:
@@ -45,6 +58,115 @@ class SessionService:
                 error_code=ErrorCode.SESSION_HAS_ACTIVE_QUEUE_ITEMS,
                 message="Queued queries must be cleared before modifying this session",
             )
+
+    @staticmethod
+    def _ensure_session_not_canceling(db_session: AgentSession) -> None:
+        if db_session.status == "canceling":
+            raise AppException(
+                error_code=ErrorCode.BAD_REQUEST,
+                message="Session cancellation is still in progress",
+            )
+
+    @staticmethod
+    def _has_pending_cancellation(db_session: AgentSession) -> bool:
+        return (
+            db_session.status == "canceling"
+            and db_session.cancellation_requested_at is not None
+            and db_session.cancellation_completed_at is None
+        )
+
+    @staticmethod
+    def _mark_tool_executions_canceled(
+        *,
+        executions: list[Any],
+        now: datetime,
+        reason: str | None,
+    ) -> None:
+        if not executions:
+            return
+
+        suffix = (
+            f": {reason.strip()}" if isinstance(reason, str) and reason.strip() else ""
+        )
+        for execution in executions:
+            execution.is_error = True
+            execution.tool_output = {"content": f"Canceled{suffix}"}
+            if execution.duration_ms is None and execution.created_at is not None:
+                started_at = execution.created_at
+                if started_at.tzinfo is None:
+                    started_at = started_at.replace(tzinfo=timezone.utc)
+                duration = now - started_at.astimezone(timezone.utc)
+                execution.duration_ms = max(0, int(duration.total_seconds() * 1000))
+
+    @staticmethod
+    def _sync_scheduled_task_canceled(db: Session, run: AgentRun) -> None:
+        if not run.scheduled_task_id:
+            return
+
+        db_task = ScheduledTaskRepository.get_by_id(db, run.scheduled_task_id)
+        if db_task and (not db_task.last_run_id or db_task.last_run_id == run.id):
+            db_task.last_run_id = run.id
+            db_task.last_run_status = "canceled"
+            db_task.last_error = None
+
+    def _mark_run_canceled(
+        self,
+        db: Session,
+        run: AgentRun,
+        *,
+        now: datetime,
+        clear_claim: bool,
+    ) -> bool:
+        if run.status == "canceled":
+            return False
+
+        run.status = "canceled"
+        if run.finished_at is None:
+            run.finished_at = now
+        if clear_claim:
+            run.claimed_by = None
+            run.lease_expires_at = None
+        self._sync_scheduled_task_canceled(db, run)
+        return True
+
+    @staticmethod
+    def _build_executor_cancel_status(
+        *,
+        has_active_runs: bool,
+    ) -> str:
+        return "pending" if has_active_runs else "not_required"
+
+    @classmethod
+    def _requires_manager_side_cancellation(
+        cls,
+        *,
+        db_session: AgentSession,
+        has_active_runs: bool,
+        has_any_runs: bool,
+    ) -> bool:
+        if has_active_runs or cls._has_pending_cancellation(db_session):
+            return True
+        return not has_any_runs and db_session.status in {"pending", "running"}
+
+    @staticmethod
+    def _build_session_cancel_response(
+        *,
+        db_session: AgentSession,
+        canceled_runs: int,
+        canceled_queue_items: int,
+        expired_requests: int,
+        executor_cancel_status: str,
+    ) -> SessionCancelResponse:
+        return SessionCancelResponse(
+            session_id=db_session.id,
+            status=db_session.status,
+            canceled_runs=canceled_runs,
+            canceled_queued_queries=canceled_queue_items,
+            expired_user_input_requests=expired_requests,
+            executor_cancel_status=executor_cancel_status,
+            executor_cancel_target_worker_id=db_session.cancellation_target_worker_id,
+            executor_cancelled=executor_cancel_status == "completed",
+        )
 
     def create_session(
         self, db: Session, user_id: str, request: SessionCreateRequest
@@ -156,7 +278,15 @@ class SessionService:
                 db_session.pinned_at = None
 
         if request.status is not None:
-            db_session.status = request.status
+            next_status = request.status
+            if db_session.status in {"canceling", "canceled"} and next_status in {
+                "pending",
+                "running",
+                "completed",
+                "failed",
+            }:
+                next_status = db_session.status
+            db_session.status = next_status
         if request.sdk_session_id is not None:
             db_session.sdk_session_id = request.sdk_session_id
         if request.workspace_archive_url is not None:
@@ -228,9 +358,14 @@ class SessionService:
         *,
         user_id: str,
         reason: str | None = None,
-    ) -> tuple[AgentSession, int, int, int]:
-        """Cancel a session by marking all unfinished runs and queued queries as canceled."""
-        db_session = self.get_session(db, session_id)
+    ) -> SessionCancelResponse:
+        """Cancel a session and wait for manager-side executor shutdown when needed."""
+        db_session = SessionRepository.get_by_id_for_update(db, session_id)
+        if not db_session:
+            raise AppException(
+                error_code=ErrorCode.NOT_FOUND,
+                message=f"Session not found: {session_id}",
+            )
         if db_session.user_id != user_id:
             raise AppException(
                 error_code=ErrorCode.FORBIDDEN,
@@ -241,26 +376,30 @@ class SessionService:
         runs = (
             db.query(AgentRun)
             .filter(AgentRun.session_id == session_id)
-            .filter(AgentRun.status.in_(["queued", "claimed", "running"]))
+            .filter(
+                AgentRun.status.in_(
+                    [
+                        *self.QUEUED_RUN_STATUSES,
+                        *self.ACTIVE_CANCELLATION_RUN_STATUSES,
+                    ]
+                )
+            )
             .order_by(AgentRun.created_at.desc())
             .all()
         )
-        canceled_runs = 0
-        for run in runs:
-            run.status = "canceled"
-            run.finished_at = now
-            run.claimed_by = None
-            run.lease_expires_at = None
-            canceled_runs += 1
+        queued_runs = [run for run in runs if run.status in self.QUEUED_RUN_STATUSES]
+        active_runs = [
+            run for run in runs if run.status in self.ACTIVE_CANCELLATION_RUN_STATUSES
+        ]
 
-            if run.scheduled_task_id:
-                db_task = ScheduledTaskRepository.get_by_id(db, run.scheduled_task_id)
-                if db_task and (
-                    not db_task.last_run_id or db_task.last_run_id == run.id
-                ):
-                    db_task.last_run_id = run.id
-                    db_task.last_run_status = run.status
-                    db_task.last_error = None
+        canceled_runs = 0
+        for run in queued_runs:
+            if self._mark_run_canceled(db, run, now=now, clear_claim=True):
+                canceled_runs += 1
+
+        for run in active_runs:
+            if run.status != "canceling":
+                run.status = "canceling"
 
         canceled_queue_items = SessionQueueItemRepository.mark_canceled(
             db, session_id=session_id
@@ -275,31 +414,201 @@ class SessionService:
             entry.expires_at = now
             expired_requests += 1
 
-        unfinished_tools = ToolExecutionRepository.list_unfinished_by_session(
-            db, session_id
+        self._mark_tool_executions_canceled(
+            executions=ToolExecutionRepository.list_unfinished_by_session(
+                db,
+                session_id,
+            ),
+            now=now,
+            reason=reason,
         )
-        if unfinished_tools:
-            suffix = (
-                f": {reason.strip()}"
-                if isinstance(reason, str) and reason.strip()
-                else ""
-            )
-            for execution in unfinished_tools:
-                execution.is_error = True
-                execution.tool_output = {"content": f"Canceled{suffix}"}
-                if execution.duration_ms is None and execution.created_at is not None:
-                    started_at = execution.created_at
-                    if started_at.tzinfo is None:
-                        started_at = started_at.replace(tzinfo=timezone.utc)
-                    duration = now - started_at.astimezone(timezone.utc)
-                    execution.duration_ms = max(0, int(duration.total_seconds() * 1000))
 
-        db_session.status = "canceled"
+        has_active_runs = bool(active_runs)
+        requires_manager_side_cancellation = self._requires_manager_side_cancellation(
+            db_session=db_session,
+            has_active_runs=has_active_runs,
+            has_any_runs=bool(runs),
+        )
+        executor_cancel_status = self._build_executor_cancel_status(
+            has_active_runs=requires_manager_side_cancellation
+        )
+        if requires_manager_side_cancellation:
+            if not self._has_pending_cancellation(db_session):
+                target_run = active_runs[0] if active_runs else None
+                target_worker_id = next(
+                    (
+                        run.claimed_by
+                        for run in active_runs
+                        if isinstance(run.claimed_by, str) and run.claimed_by.strip()
+                    ),
+                    None,
+                )
+                db_session.cancellation_requested_at = now
+                db_session.cancellation_target_run_id = (
+                    target_run.id if target_run else None
+                )
+                db_session.cancellation_target_worker_id = target_worker_id
+                db_session.cancellation_claimed_by = None
+                db_session.cancellation_lease_expires_at = None
+                db_session.cancellation_completed_at = None
+                db_session.cancellation_error = None
+            if reason is not None:
+                db_session.cancellation_reason = reason.strip() or None
+            db_session.status = "canceling"
+        else:
+            SessionQueueService.clear_cancellation_state(db_session)
+            db_session.status = "canceled"
 
         db.commit()
         db.refresh(db_session)
 
-        return db_session, canceled_runs, canceled_queue_items, expired_requests
+        return self._build_session_cancel_response(
+            db_session=db_session,
+            canceled_runs=canceled_runs,
+            canceled_queue_items=canceled_queue_items,
+            expired_requests=expired_requests,
+            executor_cancel_status=executor_cancel_status,
+        )
+
+    def claim_next_cancellation(
+        self,
+        db: Session,
+        *,
+        worker_id: str,
+        lease_seconds: int,
+    ) -> SessionCancellationClaimResponse | None:
+        """Claim the next pending session cancellation for a manager worker."""
+        normalized_worker_id = worker_id.strip()
+        if not normalized_worker_id:
+            raise AppException(
+                error_code=ErrorCode.BAD_REQUEST,
+                message="worker_id cannot be empty",
+            )
+
+        lease_seconds = max(5, int(lease_seconds))
+        now = datetime.now(timezone.utc)
+        lease_until = now + timedelta(seconds=lease_seconds)
+
+        db_session = (
+            db.query(AgentSession)
+            .filter(AgentSession.status == "canceling")
+            .filter(AgentSession.cancellation_requested_at.isnot(None))
+            .filter(AgentSession.cancellation_completed_at.is_(None))
+            .filter(
+                or_(
+                    AgentSession.cancellation_target_worker_id == normalized_worker_id,
+                    AgentSession.cancellation_target_worker_id.is_(None),
+                )
+            )
+            .filter(
+                or_(
+                    AgentSession.cancellation_claimed_by.is_(None),
+                    AgentSession.cancellation_lease_expires_at.is_(None),
+                    AgentSession.cancellation_lease_expires_at < now,
+                )
+            )
+            .order_by(AgentSession.cancellation_requested_at.asc())
+            .with_for_update(skip_locked=True)
+            .first()
+        )
+        if db_session is None:
+            db.commit()
+            return None
+
+        db_session.cancellation_claimed_by = normalized_worker_id
+        db_session.cancellation_lease_expires_at = lease_until
+        db.commit()
+        db.refresh(db_session)
+
+        return SessionCancellationClaimResponse(
+            session_id=db_session.id,
+            run_id=db_session.cancellation_target_run_id,
+            worker_id=db_session.cancellation_target_worker_id,
+            reason=db_session.cancellation_reason,
+            requested_at=db_session.cancellation_requested_at or now,
+        )
+
+    def complete_cancellation(
+        self,
+        db: Session,
+        session_id: uuid.UUID,
+        *,
+        worker_id: str,
+        stop_status: str,
+        message: str | None = None,
+    ) -> SessionCancellationCompleteResponse:
+        """Finalize or release a claimed session cancellation."""
+        normalized_worker_id = worker_id.strip()
+        if not normalized_worker_id:
+            raise AppException(
+                error_code=ErrorCode.BAD_REQUEST,
+                message="worker_id cannot be empty",
+            )
+
+        db_session = SessionRepository.get_by_id_for_update(db, session_id)
+        if not db_session:
+            raise AppException(
+                error_code=ErrorCode.NOT_FOUND,
+                message=f"Session not found: {session_id}",
+            )
+        if not self._has_pending_cancellation(db_session):
+            raise AppException(
+                error_code=ErrorCode.BAD_REQUEST,
+                message="Session has no pending cancellation request",
+            )
+        if db_session.cancellation_claimed_by not in {None, normalized_worker_id}:
+            raise AppException(
+                error_code=ErrorCode.FORBIDDEN,
+                message="Cancellation is claimed by another worker",
+            )
+
+        stop_status_value = stop_status.strip().lower()
+        if stop_status_value not in {"stopped", "not_found", "failed"}:
+            raise AppException(
+                error_code=ErrorCode.BAD_REQUEST,
+                message=f"Invalid stop_status: {stop_status}",
+            )
+
+        now = datetime.now(timezone.utc)
+        if stop_status_value == "failed":
+            db_session.cancellation_claimed_by = None
+            db_session.cancellation_lease_expires_at = None
+            db_session.cancellation_error = (message or "Executor stop failed").strip()
+            db.commit()
+            db.refresh(db_session)
+            return SessionCancellationCompleteResponse(
+                session_id=db_session.id,
+                status=db_session.status,
+                stop_status=stop_status_value,
+                canceled_runs=0,
+            )
+
+        runs = (
+            db.query(AgentRun)
+            .filter(AgentRun.session_id == session_id)
+            .filter(AgentRun.status.in_(["canceling", "claimed", "running"]))
+            .all()
+        )
+        canceled_runs = 0
+        for run in runs:
+            if self._mark_run_canceled(db, run, now=now, clear_claim=True):
+                canceled_runs += 1
+
+        db_session.status = "canceled"
+        db_session.cancellation_completed_at = now
+        db_session.cancellation_claimed_by = None
+        db_session.cancellation_lease_expires_at = None
+        db_session.cancellation_error = None
+
+        db.commit()
+        db.refresh(db_session)
+
+        return SessionCancellationCompleteResponse(
+            session_id=db_session.id,
+            status=db_session.status,
+            stop_status=stop_status_value,
+            canceled_runs=canceled_runs,
+        )
 
     def branch_session(
         self,
@@ -497,6 +806,7 @@ class SessionService:
                 error_code=ErrorCode.FORBIDDEN,
                 message="Session does not belong to the user",
             )
+        self._ensure_session_not_canceling(db_session)
         self._ensure_no_active_queue_items(db, db_session.id)
 
         user_message = MessageRepository.get_by_id(db, user_message_id)
@@ -585,6 +895,7 @@ class SessionService:
             schedule_mode="immediate",
             config_snapshot=run_config_snapshot or None,
         )
+        SessionQueueService.clear_cancellation_state(db_session)
         db_session.state_patch = {}
         db_session.status = "pending"
 
@@ -622,6 +933,7 @@ class SessionService:
                 error_code=ErrorCode.FORBIDDEN,
                 message="Session does not belong to the user",
             )
+        self._ensure_session_not_canceling(db_session)
         self._ensure_no_active_queue_items(db, db_session.id)
 
         user_message = MessageRepository.get_by_id(db, user_message_id)
@@ -707,6 +1019,7 @@ class SessionService:
             schedule_mode="immediate",
             config_snapshot=run_config_snapshot or None,
         )
+        SessionQueueService.clear_cancellation_state(db_session)
         db_session.state_patch = {}
         db_session.status = "pending"
         # Start a fresh upstream SDK thread, otherwise removed turns may still affect context.

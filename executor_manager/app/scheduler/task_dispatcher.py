@@ -55,6 +55,24 @@ class TaskDispatcher:
             cls.container_pool = ContainerPool()
         return cls.container_pool
 
+    @staticmethod
+    async def _session_stop_requested(
+        backend_client: BackendClient,
+        session_id: str,
+    ) -> bool:
+        try:
+            session = await backend_client.get_session(session_id)
+        except Exception as e:
+            logger.warning(
+                "Failed to fetch session status before dispatch: %s: %r",
+                type(e).__name__,
+                e,
+            )
+            return False
+
+        status = str(session.get("status") or "").strip().lower()
+        return status in {"canceling", "canceled"}
+
     @classmethod
     async def resolve_executor_target(
         cls,
@@ -142,6 +160,20 @@ class TaskDispatcher:
             logger.info(
                 f"Dispatching task {task_id} (session: {session_id}, mode: {container_mode})"
             )
+
+            if await TaskDispatcher._session_stop_requested(
+                backend_client,
+                session_id,
+            ):
+                logger.info(
+                    "task_dispatch_aborted_before_prepare",
+                    extra={
+                        "task_id": task_id,
+                        "session_id": session_id,
+                        "user_id": user_id,
+                    },
+                )
+                return
 
             step_started = time.perf_counter()
             resolved_config = await config_resolver.resolve(
@@ -271,6 +303,20 @@ class TaskDispatcher:
                     f"Failed to stage subagents for session {session_id}: {exc}"
                 )
 
+            if await TaskDispatcher._session_stop_requested(
+                backend_client,
+                session_id,
+            ):
+                logger.info(
+                    "task_dispatch_aborted_before_container",
+                    extra={
+                        "task_id": task_id,
+                        "session_id": session_id,
+                        "user_id": user_id,
+                    },
+                )
+                return
+
             step_started = time.perf_counter()
             browser_enabled = bool(resolved_config.get("browser_enabled"))
             (
@@ -298,6 +344,21 @@ class TaskDispatcher:
                     "browser_enabled": browser_enabled,
                 },
             )
+
+            if await TaskDispatcher._session_stop_requested(
+                backend_client,
+                session_id,
+            ):
+                await TaskDispatcher.get_container_pool().cancel_task(session_id)
+                logger.info(
+                    "task_dispatch_aborted_after_container",
+                    extra={
+                        "task_id": task_id,
+                        "session_id": session_id,
+                        "user_id": user_id,
+                    },
+                )
+                return
 
             step_started = time.perf_counter()
             await backend_client.update_session_status(session_id, "running")
@@ -336,6 +397,21 @@ class TaskDispatcher:
                 },
             )
 
+            if await TaskDispatcher._session_stop_requested(
+                backend_client,
+                session_id,
+            ):
+                await TaskDispatcher.get_container_pool().cancel_task(session_id)
+                logger.info(
+                    "task_dispatch_aborted_after_execute",
+                    extra={
+                        "task_id": task_id,
+                        "session_id": session_id,
+                        "user_id": user_id,
+                    },
+                )
+                return
+
             logger.info(f"Task {task_id} dispatched successfully to executor")
             logger.info(
                 "timing",
@@ -352,7 +428,12 @@ class TaskDispatcher:
 
         except Exception as e:
             logger.error(f"Failed to dispatch task {task_id}: {e}")
-            await backend_client.update_session_status(session_id, "failed")
+            stop_requested = await TaskDispatcher._session_stop_requested(
+                backend_client,
+                session_id,
+            )
+            if not stop_requested:
+                await backend_client.update_session_status(session_id, "failed")
             await TaskDispatcher.get_container_pool().cancel_task(session_id)
             raise
         finally:

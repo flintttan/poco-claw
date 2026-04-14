@@ -63,9 +63,13 @@ class BackendClient:
         """Create a session, returns session info dict with session_id and sdk_session_id."""
         response = await self._request(
             "POST",
-            "/api/v1/sessions",
-            json={"user_id": user_id, "config": config},
-            headers=self._trace_headers(),
+            "/api/v1/internal/sessions",
+            json={"config": config},
+            headers={
+                "X-Internal-Token": self.settings.internal_api_token,
+                "X-User-Id": user_id,
+                **self._trace_headers(),
+            },
         )
         data = response.json()
         return data["data"]
@@ -74,11 +78,28 @@ class BackendClient:
         """Update session status."""
         await self._request(
             "PATCH",
-            f"/api/v1/sessions/{session_id}",
+            f"/api/v1/internal/sessions/{session_id}/status",
             json={"status": status},
-            headers=self._trace_headers(),
+            headers={
+                "X-Internal-Token": self.settings.internal_api_token,
+                **self._trace_headers(),
+            },
             retry_connect_errors=2,
         )
+
+    async def get_session(self, session_id: str) -> dict:
+        """Fetch session details from Backend internal API."""
+        response = await self._request(
+            "GET",
+            f"/api/v1/internal/sessions/{session_id}",
+            headers={
+                "X-Internal-Token": self.settings.internal_api_token,
+                **self._trace_headers(),
+            },
+            retry_connect_errors=2,
+        )
+        data = response.json()
+        return data.get("data", {}) or {}
 
     async def forward_callback(self, callback_data: dict) -> dict[str, Any]:
         """Forward Executor callback to Backend and return the callback response."""
@@ -135,6 +156,52 @@ class BackendClient:
             f"/api/v1/runs/{run_id}/fail",
             json={"worker_id": worker_id, "error_message": error_message},
             headers=self._trace_headers(),
+            retry_connect_errors=2,
+        )
+        data = response.json()
+        return data["data"]
+
+    async def claim_session_cancellation(
+        self,
+        *,
+        worker_id: str,
+        lease_seconds: int = 30,
+    ) -> dict | None:
+        """Claim the next pending session cancellation for this worker."""
+        response = await self._request(
+            "POST",
+            "/api/v1/internal/sessions/cancellations/claim",
+            json={"worker_id": worker_id, "lease_seconds": lease_seconds},
+            headers={
+                "X-Internal-Token": self.settings.internal_api_token,
+                **self._trace_headers(),
+            },
+            retry_connect_errors=2,
+        )
+        data = response.json()
+        return data.get("data")
+
+    async def complete_session_cancellation(
+        self,
+        *,
+        session_id: str,
+        worker_id: str,
+        stop_status: str,
+        message: str | None = None,
+    ) -> dict:
+        """Acknowledge session cancellation handling back to Backend."""
+        response = await self._request(
+            "POST",
+            f"/api/v1/internal/sessions/{session_id}/cancellation-complete",
+            json={
+                "worker_id": worker_id,
+                "stop_status": stop_status,
+                "message": message,
+            },
+            headers={
+                "X-Internal-Token": self.settings.internal_api_token,
+                **self._trace_headers(),
+            },
             retry_connect_errors=2,
         )
         data = response.json()
@@ -254,6 +321,7 @@ class BackendClient:
                 "GET",
                 f"/api/v1/presets/{preset_id}",
                 headers={
+                    "X-Internal-Token": self.settings.internal_api_token,
                     "X-User-Id": user_id,
                     **self._trace_headers(),
                 },

@@ -541,6 +541,7 @@
   "status": {
     "pending": "待处理",
     "running": "进行中",
+    "canceling": "取消中",
     "completed": "已完成",
     "failed": "失败",
     "canceled": "已取消",
@@ -977,6 +978,7 @@
         "queued": "排队中",
         "claimed": "已领取",
         "running": "运行中",
+        "canceling": "取消中",
         "completed": "成功",
         "failed": "失败",
         "canceled": "已取消",
@@ -1231,11 +1233,11 @@
         "descriptionLabel": "描述",
         "setupTitle": "连接 SkillsMP，发现更多技能",
         "setupDescription": "SkillsMP 是一个技能市场，你可以按热门或搜索方式发现可复用的 agent skill。",
-        "setupHint": "请先前往 设置 > 其他 填写 SkillsMP API Key，然后再回到这里浏览市场结果。",
+        "setupHint": "SkillsMP 市场由服务端统一配置；如果这里不可用，请联系管理员检查服务端配置。",
         "openSettings": "前往设置",
-        "invalidKeyTitle": "当前 SkillsMP API Key 无效",
-        "invalidKeyDescription": "SkillsMP 拒绝了当前的 API Key，因此暂时无法加载技能市场的搜索和推荐结果。",
-        "invalidKeyHint": "请前往 设置 > 其他 更新 SkillsMP API Key，保存后再返回重试。"
+        "invalidKeyTitle": "当前 SkillsMP 服务配置无效",
+        "invalidKeyDescription": "SkillsMP 拒绝了当前的服务端凭据，因此暂时无法加载技能市场的搜索和推荐结果。",
+        "invalidKeyHint": "SkillsMP 市场由服务端统一配置；请联系管理员检查服务端凭据。"
       }
     },
     "pluginsManager": {
@@ -2312,6 +2314,21 @@
       "notSupported": "当前浏览器不支持原生文件夹选择，请手动输入路径。",
       "resolveFailed": "无法自动识别路径，请手动填写主机路径。",
       "searchLimitation": "出于安全原因，主机路径自动补全只会按所选目录名称搜索；如果存在重名目录，自动识别就可能失败，需要你手动填写绝对路径。"
+    }
+  },
+  "auth": {
+    "login": {
+      "title": "登录 Poco",
+      "subtitle": "使用 Google 或 GitHub 继续。",
+      "google": "使用 Google 继续",
+      "github": "使用 GitHub 继续",
+      "hint": "我们会使用安全的浏览器会话来保持登录状态。",
+      "errors": {
+        "default": "登录失败，请重试。",
+        "provider_not_configured": "该登录方式尚未配置。",
+        "invalid_oauth_state": "登录会话已过期，请重试。",
+        "oauth_failed": "无法完成登录，请重试。"
+      }
     }
   }
 }
