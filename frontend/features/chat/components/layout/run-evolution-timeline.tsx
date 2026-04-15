@@ -119,9 +119,9 @@ function getStatusTone(status: string): {
   switch (status) {
     case "completed":
       return {
-        node: "border-emerald-500 bg-emerald-500 text-white",
-        line: "bg-emerald-400/80",
-        badge: "text-emerald-700",
+        node: "border-emerald-500/80 bg-emerald-500 text-white dark:border-emerald-400/80 dark:bg-emerald-400 dark:text-emerald-950",
+        line: "bg-emerald-400/80 dark:bg-emerald-300/80",
+        badge: "text-emerald-700 dark:text-emerald-300",
       };
     case "running":
     case "pending":
@@ -129,21 +129,21 @@ function getStatusTone(status: string): {
     case "queued":
     case "canceling":
       return {
-        node: "border-primary bg-primary text-primary-foreground",
-        line: "bg-primary/70",
-        badge: "text-primary",
+        node: "border-primary/80 bg-primary text-primary-foreground dark:border-primary/70 dark:bg-primary dark:text-primary-foreground",
+        line: "bg-primary/70 dark:bg-primary/80",
+        badge: "text-primary dark:text-primary/90",
       };
     case "failed":
       return {
-        node: "border-destructive bg-destructive text-destructive-foreground",
-        line: "bg-destructive/70",
-        badge: "text-destructive",
+        node: "border-destructive/80 bg-destructive text-destructive-foreground dark:border-red-400/80 dark:bg-red-400 dark:text-red-950",
+        line: "bg-destructive/70 dark:bg-red-400/80",
+        badge: "text-destructive dark:text-red-300",
       };
     default:
       return {
-        node: "border-muted-foreground/30 bg-muted text-muted-foreground",
-        line: "bg-muted-foreground/30",
-        badge: "text-muted-foreground",
+        node: "border-border bg-muted/80 text-muted-foreground dark:border-border/80 dark:bg-muted/60 dark:text-muted-foreground",
+        line: "bg-border dark:bg-border/80",
+        badge: "text-muted-foreground dark:text-muted-foreground",
       };
   }
 }
@@ -234,11 +234,11 @@ export function RunEvolutionTimeline({
   if (runs.length <= 1) return null;
 
   return (
-    <div className="border-b border-border/60 bg-background/90 px-3 py-1.5">
+    <div className="border-b border-border/60 bg-background/90 px-3 py-1.5 dark:bg-background/95">
       <div
         tabIndex={0}
         onKeyDown={handleArrowNavigation}
-        className="rounded-lg border border-border/60 bg-background/95 px-2 py-1.5 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="rounded-lg border border-border/60 bg-background/95 px-2 py-1.5 shadow-sm shadow-black/5 outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-border/80 dark:bg-card/80 dark:shadow-black/25"
       >
         <div className="overflow-x-auto">
           <div className="flex min-w-max items-center gap-1">
@@ -293,7 +293,7 @@ export function RunEvolutionTimeline({
                           "group flex min-w-[52px] flex-col items-center gap-0.5 rounded-lg border px-1.5 py-1 transition-all",
                           isSelected
                             ? "border-transparent shadow-none"
-                            : "border-transparent hover:bg-muted/40",
+                            : "border-transparent hover:bg-muted/40 dark:hover:bg-muted/30",
                         )}
                         aria-label={t("runTimeline.selectRun", {
                           number: item.index + 1,
@@ -304,12 +304,14 @@ export function RunEvolutionTimeline({
                             className={cn(
                               "flex size-5 items-center justify-center rounded-full border text-[10px] shadow-sm transition-transform duration-200",
                               statusTone.node,
-                              isActionNode ? "size-6" : "size-5 bg-background",
+                              isActionNode
+                                ? "size-6"
+                                : "size-5 bg-background dark:bg-card",
                               isSelected
-                                ? "scale-110 ring-4 ring-primary/10"
+                                ? "scale-110 ring-4 ring-primary/10 dark:ring-primary/20"
                                 : "scale-100 opacity-95 group-hover:scale-105",
                               run.status === "running" &&
-                                "shadow-primary/30 motion-safe:animate-pulse",
+                                "shadow-primary/30 motion-safe:animate-pulse dark:shadow-primary/40",
                             )}
                           >
                             {run.status === "running" ? (
@@ -332,8 +334,8 @@ export function RunEvolutionTimeline({
                             className={cn(
                               "rounded-full px-1.5 py-0.5 text-[10px] font-medium leading-none transition-colors",
                               isSelected
-                                ? "bg-primary text-primary-foreground"
-                                : "text-muted-foreground group-hover:text-foreground",
+                                ? "bg-primary text-primary-foreground dark:bg-primary dark:text-primary-foreground"
+                                : "text-muted-foreground group-hover:text-foreground dark:group-hover:text-foreground",
                             )}
                           >
                             {`R${item.index + 1}`}
@@ -344,7 +346,7 @@ export function RunEvolutionTimeline({
                     <TooltipContent
                       side="bottom"
                       align="start"
-                      className="max-w-72 rounded-xl border border-border/80 bg-popover p-3 text-popover-foreground shadow-xl backdrop-blur-sm"
+                      className="max-w-72 rounded-xl border border-border/80 bg-popover/98 p-3 text-popover-foreground shadow-xl shadow-black/10 backdrop-blur-sm dark:border-border dark:bg-popover dark:shadow-black/40"
                     >
                       <div className="space-y-2 text-xs">
                         <div className="flex items-center justify-between gap-3">
@@ -375,7 +377,7 @@ export function RunEvolutionTimeline({
                           {summary}
                         </div>
                         <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
-                          <span className="rounded-full bg-muted px-2 py-0.5">
+                          <span className="rounded-full bg-muted px-2 py-0.5 dark:bg-muted/70">
                             {isActionNode
                               ? t("runTimeline.preview.execution", {
                                   count: fileChanges.length,
@@ -383,7 +385,7 @@ export function RunEvolutionTimeline({
                               : t("runTimeline.preview.conversationOnly")}
                           </span>
                           {durationLabel ? (
-                            <span className="rounded-full bg-muted px-2 py-0.5">
+                            <span className="rounded-full bg-muted px-2 py-0.5 dark:bg-muted/70">
                               {t("runTimeline.preview.duration", {
                                 duration: durationLabel,
                               })}
