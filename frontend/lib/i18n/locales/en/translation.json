@@ -576,7 +576,15 @@
     "chat": "Chat",
     "computer": "Computer",
     "artifacts": "Artifacts",
-    "status": "Status"
+    "status": "Status",
+    "runs": {
+      "openAll": "View all runs",
+      "allRuns": "All runs",
+      "sheetDescription": "Quickly switch replay and artifacts across different runs.",
+      "current": "Current",
+      "viewingHistory": "Viewing history Run {{number}}",
+      "backToCurrent": "Back to current"
+    }
   },
   "computer": {
     "title": "Poco Computer",

@@ -56,8 +56,8 @@ export function ExecutionContainer({ sessionId }: ExecutionContainerProps) {
     () => (runs.length > 0 ? runs[runs.length - 1] : null),
     [runs],
   );
-  const effectiveSelectedRunId =
-    selectedRunId ?? activeRun?.run_id ?? latestRun?.run_id ?? null;
+  const currentRunId = activeRun?.run_id ?? latestRun?.run_id ?? null;
+  const effectiveSelectedRunId = selectedRunId ?? currentRunId;
   const selectedRun = React.useMemo(
     () => runs.find((run) => run.run_id === effectiveSelectedRunId) ?? null,
     [effectiveSelectedRunId, runs],
@@ -265,11 +265,21 @@ export function ExecutionContainer({ sessionId }: ExecutionContainerProps) {
         sessionId={sessionId}
         runs={runs}
         selectedRunId={effectiveSelectedRunId ?? undefined}
+        currentRunId={currentRunId ?? undefined}
+        isViewingHistory={Boolean(
+          effectiveSelectedRunId &&
+          currentRunId &&
+          effectiveSelectedRunId !== currentRunId,
+        )}
         legacySessionReplayAvailable={legacySessionReplayAvailable}
         legacySessionArtifactsAvailable={legacySessionArtifactsAvailable}
         onSelectRun={(runId) => {
           setSelectedRunId(runId);
           setIsPinnedToHistory(runId !== activeRun?.run_id);
+        }}
+        onFollowCurrentRun={() => {
+          setSelectedRunId(currentRunId);
+          setIsPinnedToHistory(false);
         }}
         updateSession={updateSession}
         showArtifactsTab={showArtifactsTab}

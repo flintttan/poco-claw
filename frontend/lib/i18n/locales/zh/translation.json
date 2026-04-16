@@ -576,7 +576,15 @@
     "chat": "对话",
     "computer": "电脑",
     "artifacts": "产物",
-    "status": "状态"
+    "status": "状态",
+    "runs": {
+      "openAll": "查看全部 Run",
+      "allRuns": "全部 Run",
+      "sheetDescription": "快速切换查看不同运行轮次的回放与产物。",
+      "current": "当前",
+      "viewingHistory": "正在查看历史 Run {{number}}",
+      "backToCurrent": "回到当前"
+    }
   },
   "computer": {
     "title": "电脑",
