@@ -49,8 +49,8 @@ export function MobileRunSheet({
   onFollowCurrentRun,
 }: MobileRunSheetProps) {
   const { t } = useT("translation");
-  const [runToolPresence, setRunToolPresence] = React.useState<
-    Record<string, boolean>
+  const [runToolCounts, setRunToolCounts] = React.useState<
+    Record<string, number>
   >({});
 
   React.useEffect(() => {
@@ -59,45 +59,45 @@ export function MobileRunSheet({
 
     const unresolvedRuns = runs.filter((run) => {
       if (hasRunArtifacts(run)) return false;
-      return runToolPresence[run.run_id] === undefined;
+      return runToolCounts[run.run_id] === undefined;
     });
     if (unresolvedRuns.length === 0) return;
 
-    const loadToolPresence = async () => {
+    const loadToolCounts = async () => {
       const entries = await Promise.all(
         unresolvedRuns.map(async (run) => {
           try {
             const items = await getRunToolExecutionsAction({
               runId: run.run_id,
-              limit: 1,
+              limit: 2000,
               offset: 0,
             });
-            return [run.run_id, items.length > 0] as const;
+            return [run.run_id, items.length] as const;
           } catch (error) {
             console.error(
-              "[MobileRunSheet] Failed to load run tool presence:",
+              "[MobileRunSheet] Failed to load run tool counts:",
               error,
             );
-            return [run.run_id, false] as const;
+            return [run.run_id, 0] as const;
           }
         }),
       );
 
       if (cancelled) return;
-      setRunToolPresence((prev) => {
+      setRunToolCounts((prev) => {
         const next = { ...prev };
-        for (const [runId, hasTools] of entries) {
-          next[runId] = hasTools;
+        for (const [runId, toolCount] of entries) {
+          next[runId] = toolCount;
         }
         return next;
       });
     };
 
-    void loadToolPresence();
+    void loadToolCounts();
     return () => {
       cancelled = true;
     };
-  }, [open, runToolPresence, runs]);
+  }, [open, runToolCounts, runs]);
 
   const isViewingHistory = Boolean(
     selectedRunId && currentRunId && selectedRunId !== currentRunId,
@@ -138,18 +138,20 @@ export function MobileRunSheet({
               const isCurrent = run.run_id === currentRunId;
               const isActionNode = buildActionHint(
                 run,
-                runToolPresence[run.run_id] === true,
+                (runToolCounts[run.run_id] ?? 0) > 0,
               );
               const statusTone = getStatusTone(run.status);
               const duration = formatDurationSeconds(run);
               const fileChanges =
                 run.state_patch?.workspace_state?.file_changes?.length ?? 0;
+              const executionSummaryCount =
+                fileChanges + (runToolCounts[run.run_id] ?? 0);
               const summary = run.last_error
                 ? run.last_error
                 : run.state_patch?.current_step ||
                   (isActionNode
                     ? t("runTimeline.preview.executionSummary", {
-                        count: fileChanges,
+                        count: executionSummaryCount,
                       })
                     : t("runTimeline.preview.conversationOnly"));
 

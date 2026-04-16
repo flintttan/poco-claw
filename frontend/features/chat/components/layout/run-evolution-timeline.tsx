@@ -154,8 +154,8 @@ export function RunEvolutionTimeline({
   onSelectRun,
 }: RunEvolutionTimelineProps) {
   const { t } = useT("translation");
-  const [runToolPresence, setRunToolPresence] = React.useState<
-    Record<string, boolean>
+  const [runToolCounts, setRunToolCounts] = React.useState<
+    Record<string, number>
   >({});
   const selectedIndex = Math.max(
     0,
@@ -171,45 +171,45 @@ export function RunEvolutionTimeline({
 
     const unresolvedRuns = runs.filter((run) => {
       if (hasRunArtifacts(run)) return false;
-      return runToolPresence[run.run_id] === undefined;
+      return runToolCounts[run.run_id] === undefined;
     });
     if (unresolvedRuns.length === 0) return;
 
-    const loadToolPresence = async () => {
+    const loadToolCounts = async () => {
       const entries = await Promise.all(
         unresolvedRuns.map(async (run) => {
           try {
             const items = await getRunToolExecutionsAction({
               runId: run.run_id,
-              limit: 1,
+              limit: 2000,
               offset: 0,
             });
-            return [run.run_id, items.length > 0] as const;
+            return [run.run_id, items.length] as const;
           } catch (error) {
             console.error(
-              "[RunEvolutionTimeline] Failed to load run tool presence:",
+              "[RunEvolutionTimeline] Failed to load run tool counts:",
               error,
             );
-            return [run.run_id, false] as const;
+            return [run.run_id, 0] as const;
           }
         }),
       );
 
       if (cancelled) return;
-      setRunToolPresence((prev) => {
+      setRunToolCounts((prev) => {
         const next = { ...prev };
-        for (const [runId, hasTools] of entries) {
-          next[runId] = hasTools;
+        for (const [runId, toolCount] of entries) {
+          next[runId] = toolCount;
         }
         return next;
       });
     };
 
-    void loadToolPresence();
+    void loadToolCounts();
     return () => {
       cancelled = true;
     };
-  }, [runToolPresence, runs]);
+  }, [runToolCounts, runs]);
 
   const handleArrowNavigation = React.useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
@@ -260,10 +260,12 @@ export function RunEvolutionTimeline({
               const isSelected = run.run_id === selectedRunId;
               const isActionNode = buildActionHint(
                 run,
-                runToolPresence[run.run_id] === true,
+                (runToolCounts[run.run_id] ?? 0) > 0,
               );
               const fileChanges =
                 run.state_patch?.workspace_state?.file_changes ?? [];
+              const executionSummaryCount =
+                fileChanges.length + (runToolCounts[run.run_id] ?? 0);
               const durationLabel = formatDurationSeconds(run);
               const statusTone = getStatusTone(run.status);
               const summary = run.last_error
@@ -271,7 +273,7 @@ export function RunEvolutionTimeline({
                 : run.state_patch?.current_step ||
                   (isActionNode
                     ? t("runTimeline.preview.executionSummary", {
-                        count: fileChanges.length,
+                        count: executionSummaryCount,
                       })
                     : t("runTimeline.preview.conversationOnly"));
 
@@ -380,7 +382,7 @@ export function RunEvolutionTimeline({
                           <span className="rounded-full bg-muted px-2 py-0.5 dark:bg-muted/70">
                             {isActionNode
                               ? t("runTimeline.preview.execution", {
-                                  count: fileChanges.length,
+                                  count: executionSummaryCount,
                                 })
                               : t("runTimeline.preview.conversationOnly")}
                           </span>
