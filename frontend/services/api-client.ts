@@ -196,6 +196,7 @@ export const API_ENDPOINTS = {
     `/projects/${projectId}/files/${fileId}`,
 
   // Auth
+  authConfig: "/auth/config",
   authMe: "/auth/me",
   authLogout: "/auth/logout",
 
