@@ -6,10 +6,7 @@ import {
   buildLoginPath,
   buildSessionRecoveryPath,
 } from "@/features/auth";
-import {
-  getServerAuthConfig,
-  getServerAuthState,
-} from "@/features/auth/lib/server-session";
+import { getServerAuthState } from "@/features/auth/lib/server-session";
 
 export default async function ShellLayout({
   children,
@@ -19,12 +16,7 @@ export default async function ShellLayout({
   params: Promise<{ lng: string }>;
 }) {
   const { lng } = await params;
-  const authConfig = await getServerAuthConfig();
   const authState = await getServerAuthState();
-
-  if (authState.status === "single_user" || !authConfig.login_required) {
-    return <AppShell lng={lng}>{children}</AppShell>;
-  }
 
   if (authState.status === "anonymous") {
     redirect(buildLoginPath(lng, buildHomePath(lng)));

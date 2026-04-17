@@ -1,5 +1,6 @@
 "use client";
 
+import * as React from "react";
 import { AlertCircle } from "lucide-react";
 
 import {
@@ -15,6 +16,7 @@ import {
   buildProviderLoginPath,
   normalizeNextPath,
 } from "@/features/auth/lib/paths";
+import { LoginPageRuntimeGuard } from "@/features/auth/components/login-page-runtime-guard";
 
 type AuthProvider = "google" | "github";
 
@@ -22,8 +24,6 @@ interface LoginPageClientProps {
   lng: string;
   nextPath?: string | null;
   errorCode?: string | null;
-  configuredProviders: AuthProvider[];
-  setupRequired: boolean;
 }
 
 function GithubIcon() {
@@ -61,11 +61,13 @@ export function LoginPageClient({
   lng,
   nextPath,
   errorCode,
-  configuredProviders,
-  setupRequired,
 }: LoginPageClientProps) {
   const { t } = useT("translation");
   const targetPath = normalizeNextPath(nextPath, lng);
+  const [configuredProviders, setConfiguredProviders] = React.useState<
+    AuthProvider[] | null
+  >(null);
+  const [setupRequired, setSetupRequired] = React.useState(false);
 
   const errorMessage =
     errorCode && errorCode !== ""
@@ -73,10 +75,11 @@ export function LoginPageClient({
           defaultValue: t("auth.login.errors.default"),
         })
       : null;
-  const availableProviders = new Set(configuredProviders);
+  const availableProviders = new Set(configuredProviders ?? []);
+  const isLoading = configuredProviders === null && !setupRequired;
   const subtitle = setupRequired
     ? t("auth.login.setupRequiredSubtitle")
-    : configuredProviders.length === 1
+    : configuredProviders?.length === 1
       ? configuredProviders[0] === "google"
         ? t("auth.login.subtitleGoogleOnly")
         : t("auth.login.subtitleGithubOnly")
@@ -84,6 +87,14 @@ export function LoginPageClient({
 
   return (
     <main className="flex min-h-dvh items-center justify-center bg-background px-4 py-10">
+      <LoginPageRuntimeGuard
+        nextPath={targetPath}
+        onResolved={({ configuredProviders: nextProviders, setupRequired }) => {
+          setConfiguredProviders(nextProviders);
+          setSetupRequired(setupRequired);
+        }}
+      />
+
       <Card className="w-full max-w-md border-border/60 bg-card/95 shadow-lg">
         <CardHeader className="space-y-3 text-center">
           <CardTitle className="text-2xl font-semibold text-foreground">
@@ -111,6 +122,12 @@ export function LoginPageClient({
             </div>
           ) : (
             <div className="grid gap-3">
+              {isLoading ? (
+                <div className="rounded-xl border border-border/60 bg-muted/30 px-4 py-4 text-sm text-muted-foreground">
+                  {t("auth.login.loading")}
+                </div>
+              ) : null}
+
               {availableProviders.has("google") ? (
                 <Button asChild size="lg" className="w-full gap-2">
                   <a href={buildProviderLoginPath("google", targetPath)}>

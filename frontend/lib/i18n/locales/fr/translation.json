@@ -2329,6 +2329,7 @@
       "google": "Continuer avec Google",
       "github": "Continuer avec GitHub",
       "hint": "Nous utilisons une session de navigateur sécurisée pour vous garder connecté.",
+      "loading": "Vérification des méthodes de connexion disponibles...",
       "setupRequiredTitle": "Configuration de connexion requise",
       "setupRequiredDescription": "Ce déploiement nécessite une connexion OAuth avant utilisation. Demandez à un administrateur de configurer Google ou GitHub.",
       "setupRequiredHint": "Configurez au moins un fournisseur de connexion, puis actualisez cette page.",
