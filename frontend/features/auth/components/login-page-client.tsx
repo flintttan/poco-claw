@@ -58,25 +58,13 @@ function GoogleIcon() {
 
 function FeishuIcon() {
   return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className="size-5">
-      <path
-        fill="#3370FF"
-        d="M13.45 2.35a4.4 4.4 0 0 1 6.2 6.2l-2.46 2.46-6.2-6.2 2.46-2.46Z"
-      />
-      <path
-        fill="#00D6B9"
-        d="M4.35 4.35a4.4 4.4 0 0 1 6.2 0l6.2 6.2-6.2 6.2-6.2-6.2a4.4 4.4 0 0 1 0-6.2Z"
-      />
-      <path
-        fill="#FF5B4D"
-        d="m17.19 12.99 2.46 2.46a4.4 4.4 0 0 1-6.2 6.2l-2.46-2.46 6.2-6.2Z"
-      />
-      <path
-        fill="#FFB800"
-        d="m4.81 13.45 6.2 6.2-2.46 2.46a4.4 4.4 0 0 1-6.2-6.2l2.46-2.46Z"
-      />
-      <circle cx="12" cy="12" r="3.15" fill="#fff" />
-    </svg>
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABwAAAAbCAYAAABvCO8sAAABzUlEQVR4Ab2WA4xdURCGazsootq2gxpBbduNGlRRbZvRi2tFte12bducfV+SWd89ZznJf33nG11Um7B1ajURaeXWPreipXLsu1szYAGr69YNqRobqNlVlT0G2MfpbFxWlpVSM62B/gAHOsHWBH2X0f9eyhSv10Z9TIktH1Chu0L/SLXfj00iMKDlA6qdj/S2gRIc5bUFlh/a2eOZZmkJLD+Ua+yA9CsoqkQe5TL2lAG6fPuHHLv+MVcPn3tzb0EgsA2nRb54csbRCAynxcIa7nNJm3E3pcWIi0jqD7mQu95x/EVR4MpjIu3WmaH0iX4pqMaze9Jw9jUFoALQ6ZtuS1hUUvEZ9tokMmCryP33QjamfiqsCEhFxpQUcwSq9ro47lza2a9eOMI0u9U7Hml2JWeI2F56kGyLAol6xDIXTm2zMwOR7tNf7S1TiLP8MEPv7IH5wajb6ihpPPa+E0hhBKQBWgINAtxlkQdwnBcQx248yRCsfEADHLHNsGGVBkR6H5kxwUYgxjRyEw9/aUBcP3m3cH+pvxZkSklwZCXNyhlkAOYHEzFwSr30oIp9jpszMgMNXwqV0QzA9lJ19qyq/0tn6J830G2V/Oc9F1YOHN8DQeBeXjEAAAAASUVORK5CYII="
+      alt=""
+      className="size-5"
+      aria-hidden="true"
+    />
   );
 }
 
