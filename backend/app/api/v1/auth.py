@@ -39,6 +39,14 @@ async def login_with_github(
     return await service.start_login(request, "github", next_path)
 
 
+@router.get("/feishu/login")
+async def login_with_feishu(
+    request: Request,
+    next_path: str | None = Query(default=None, alias="next"),
+):
+    return await service.start_login(request, "feishu", next_path)
+
+
 @router.get("/config", response_model=ResponseSchema[AuthConfigResponse])
 async def get_auth_config() -> JSONResponse:
     return Response.success(
@@ -59,6 +67,13 @@ async def github_callback(
     request: Request, db: Session = Depends(get_db)
 ) -> RedirectResponse:
     return await service.handle_callback(request, "github", db)
+
+
+@router.get("/feishu/callback")
+async def feishu_callback(
+    request: Request, db: Session = Depends(get_db)
+) -> RedirectResponse:
+    return await service.handle_callback(request, "feishu", db)
 
 
 @router.get("/me", response_model=ResponseSchema[CurrentUserResponse])

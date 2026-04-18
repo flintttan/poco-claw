@@ -5,8 +5,7 @@ import { useRouter } from "next/navigation";
 
 import { ApiError } from "@/lib/errors";
 import { API_ENDPOINTS, apiClient } from "@/services/api-client";
-
-type AuthProvider = "google" | "github";
+import type { AuthProvider } from "@/features/auth/model/types";
 
 interface AuthConfigResponse {
   mode: "oauth_required" | "oauth_optional" | "single_user";

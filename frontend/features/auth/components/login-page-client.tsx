@@ -17,8 +17,7 @@ import {
   normalizeNextPath,
 } from "@/features/auth/lib/paths";
 import { LoginPageRuntimeGuard } from "@/features/auth/components/login-page-runtime-guard";
-
-type AuthProvider = "google" | "github";
+import type { AuthProvider } from "@/features/auth/model/types";
 
 interface LoginPageClientProps {
   lng: string;
@@ -57,6 +56,42 @@ function GoogleIcon() {
   );
 }
 
+function FeishuIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="size-5">
+      <rect width="24" height="24" rx="5" fill="#00D6B9" />
+      <path
+        fill="#fff"
+        d="M7 6.75h6.1a3.4 3.4 0 0 1 0 6.8H9.9v3.7H7V6.75Zm2.9 2.45v1.9h2.95a.95.95 0 0 0 0-1.9H9.9Zm5.25 4.35h1.95a2.65 2.65 0 0 1 0 5.3h-4.8V16.4h4.55a.85.85 0 1 0 0-1.7h-1.7v-1.15Z"
+      />
+    </svg>
+  );
+}
+
+interface ProviderUiConfig {
+  labelKey: string;
+  icon: React.ComponentType;
+  variant: "default" | "outline";
+}
+
+const PROVIDER_UI_CONFIG: Record<AuthProvider, ProviderUiConfig> = {
+  google: {
+    labelKey: "auth.login.google",
+    icon: GoogleIcon,
+    variant: "default",
+  },
+  github: {
+    labelKey: "auth.login.github",
+    icon: GithubIcon,
+    variant: "outline",
+  },
+  feishu: {
+    labelKey: "auth.login.feishu",
+    icon: FeishuIcon,
+    variant: "outline",
+  },
+};
+
 export function LoginPageClient({
   lng,
   nextPath,
@@ -77,14 +112,13 @@ export function LoginPageClient({
           defaultValue: t("auth.login.errors.default"),
         })
       : null);
-  const availableProviders = new Set(configuredProviders ?? []);
   const isLoading = configuredProviders === null && !setupRequired;
   const subtitle = setupRequired
     ? t("auth.login.setupRequiredSubtitle")
     : configuredProviders?.length === 1
-      ? configuredProviders[0] === "google"
-        ? t("auth.login.subtitleGoogleOnly")
-        : t("auth.login.subtitleGithubOnly")
+      ? t("auth.login.subtitleSingle", {
+          provider: t(`auth.login.providers.${configuredProviders[0]}`),
+        })
       : t("auth.login.subtitleMultiple");
 
   const handleResolved = React.useCallback(
@@ -149,26 +183,33 @@ export function LoginPageClient({
                 </div>
               ) : null}
 
-              {availableProviders.has("google") ? (
-                <Button asChild size="lg" className="w-full gap-2">
-                  <a href={buildProviderLoginPath("google", targetPath)}>
-                    <GoogleIcon />
-                    <span>{t("auth.login.google")}</span>
-                  </a>
-                </Button>
-              ) : null}
+              {configuredProviders?.map((provider) => {
+                const config = PROVIDER_UI_CONFIG[provider];
+                const Icon = config.icon;
+                return (
+                  <Button
+                    key={provider}
+                    asChild
+                    size="lg"
+                    variant={config.variant}
+                    className="w-full gap-2"
+                  >
+                    <a href={buildProviderLoginPath(provider, targetPath)}>
+                      <Icon />
+                      <span>{t(config.labelKey)}</span>
+                    </a>
+                  </Button>
+                );
+              })}
 
-              {availableProviders.has("github") ? (
+              {!isLoading && configuredProviders?.length === 0 ? (
                 <Button
-                  asChild
                   size="lg"
                   variant="outline"
                   className="w-full gap-2"
+                  disabled
                 >
-                  <a href={buildProviderLoginPath("github", targetPath)}>
-                    <GithubIcon />
-                    <span>{t("auth.login.github")}</span>
-                  </a>
+                  {t("auth.login.noProviders")}
                 </Button>
               ) : null}
             </div>

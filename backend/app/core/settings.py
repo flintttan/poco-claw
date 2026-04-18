@@ -104,6 +104,28 @@ class Settings(BaseSettings):
     feishu_stream_enabled: bool = Field(default=True, alias="FEISHU_STREAM_ENABLED")
     feishu_app_id: str | None = Field(default=None, alias="FEISHU_APP_ID")
     feishu_app_secret: str | None = Field(default=None, alias="FEISHU_APP_SECRET")
+    feishu_oauth_client_id: str | None = Field(
+        default=None, alias="FEISHU_OAUTH_CLIENT_ID"
+    )
+    feishu_oauth_client_secret: str | None = Field(
+        default=None, alias="FEISHU_OAUTH_CLIENT_SECRET"
+    )
+    feishu_oauth_region: Literal["cn", "global"] = Field(
+        default="cn", alias="FEISHU_OAUTH_REGION"
+    )
+    feishu_oauth_scope: str = Field(default="", alias="FEISHU_OAUTH_SCOPE")
+    feishu_oauth_authorize_url: str | None = Field(
+        default=None, alias="FEISHU_OAUTH_AUTHORIZE_URL"
+    )
+    feishu_oauth_token_url: str | None = Field(
+        default=None, alias="FEISHU_OAUTH_TOKEN_URL"
+    )
+    feishu_oauth_userinfo_url: str | None = Field(
+        default=None, alias="FEISHU_OAUTH_USERINFO_URL"
+    )
+    feishu_oauth_email_verified: bool = Field(
+        default=True, alias="FEISHU_OAUTH_EMAIL_VERIFIED"
+    )
     feishu_verification_token: str | None = Field(
         default=None, alias="FEISHU_VERIFICATION_TOKEN"
     )
