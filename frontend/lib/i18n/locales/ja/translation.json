@@ -2337,6 +2337,14 @@
         "provider_not_configured": "このサインイン方法はまだ設定されていません。",
         "invalid_oauth_state": "サインインセッションの有効期限が切れました。もう一度お試しください。",
         "oauth_failed": "サインインを完了できませんでした。もう一度お試しください。"
+      },
+      "feishu": "Feishu/Lark で続行",
+      "subtitleSingle": "{{provider}} で続行します。",
+      "noProviders": "利用可能なサインイン方法がありません。",
+      "providers": {
+        "google": "Google",
+        "github": "GitHub",
+        "feishu": "Feishu/Lark"
       }
     }
   }

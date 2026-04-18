@@ -2337,6 +2337,14 @@
         "provider_not_configured": "Dieser Anmeldeanbieter ist noch nicht konfiguriert.",
         "invalid_oauth_state": "Ihre Anmeldesitzung ist abgelaufen. Bitte versuchen Sie es erneut.",
         "oauth_failed": "Die Anmeldung konnte nicht abgeschlossen werden. Bitte versuchen Sie es erneut."
+      },
+      "feishu": "Mit Feishu/Lark fortfahren",
+      "subtitleSingle": "Mit {{provider}} fortfahren.",
+      "noProviders": "Es ist kein Anmeldeanbieter verfügbar.",
+      "providers": {
+        "google": "Google",
+        "github": "GitHub",
+        "feishu": "Feishu/Lark"
       }
     }
   }

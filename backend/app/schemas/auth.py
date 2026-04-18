@@ -3,6 +3,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+AuthProviderName = Literal["google", "github", "feishu"]
+
 
 class CurrentUserResponse(BaseModel):
     id: str
@@ -15,7 +17,7 @@ class CurrentUserResponse(BaseModel):
 
 
 class AuthProviderStatus(BaseModel):
-    name: Literal["google", "github"]
+    name: AuthProviderName
     enabled: bool
 
 
@@ -24,5 +26,5 @@ class AuthConfigResponse(BaseModel):
     login_required: bool
     single_user_effective: bool
     setup_required: bool
-    configured_providers: list[Literal["google", "github"]]
+    configured_providers: list[AuthProviderName]
     providers: list[AuthProviderStatus]

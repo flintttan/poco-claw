@@ -2337,6 +2337,14 @@
         "provider_not_configured": "Ce fournisseur de connexion n’est pas encore configuré.",
         "invalid_oauth_state": "Votre session de connexion a expiré. Veuillez réessayer.",
         "oauth_failed": "Impossible de terminer la connexion. Veuillez réessayer."
+      },
+      "feishu": "Continuer avec Feishu/Lark",
+      "subtitleSingle": "Utilisez {{provider}} pour continuer.",
+      "noProviders": "Aucun fournisseur de connexion n’est disponible.",
+      "providers": {
+        "google": "Google",
+        "github": "GitHub",
+        "feishu": "Feishu/Lark"
       }
     }
   }
