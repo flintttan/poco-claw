@@ -59,11 +59,23 @@ function GoogleIcon() {
 function FeishuIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true" className="size-5">
-      <rect width="24" height="24" rx="5" fill="#00D6B9" />
       <path
-        fill="#fff"
-        d="M7 6.75h6.1a3.4 3.4 0 0 1 0 6.8H9.9v3.7H7V6.75Zm2.9 2.45v1.9h2.95a.95.95 0 0 0 0-1.9H9.9Zm5.25 4.35h1.95a2.65 2.65 0 0 1 0 5.3h-4.8V16.4h4.55a.85.85 0 1 0 0-1.7h-1.7v-1.15Z"
+        fill="#3370FF"
+        d="M13.45 2.35a4.4 4.4 0 0 1 6.2 6.2l-2.46 2.46-6.2-6.2 2.46-2.46Z"
       />
+      <path
+        fill="#00D6B9"
+        d="M4.35 4.35a4.4 4.4 0 0 1 6.2 0l6.2 6.2-6.2 6.2-6.2-6.2a4.4 4.4 0 0 1 0-6.2Z"
+      />
+      <path
+        fill="#FF5B4D"
+        d="m17.19 12.99 2.46 2.46a4.4 4.4 0 0 1-6.2 6.2l-2.46-2.46 6.2-6.2Z"
+      />
+      <path
+        fill="#FFB800"
+        d="m4.81 13.45 6.2 6.2-2.46 2.46a4.4 4.4 0 0 1-6.2-6.2l2.46-2.46Z"
+      />
+      <circle cx="12" cy="12" r="3.15" fill="#fff" />
     </svg>
   );
 }
