@@ -148,6 +148,16 @@ export function McpGrid({
                           ? t("mcpGrid.system")
                           : t("mcpGrid.user")}
                       </Badge>
+                      {server.default_enabled && !server.force_enabled ? (
+                        <Badge variant="secondary" className="text-xs">
+                          {t("common.default")}
+                        </Badge>
+                      ) : null}
+                      {server.force_enabled ? (
+                        <Badge variant="destructive" className="text-xs">
+                          {t("common.forced")}
+                        </Badge>
+                      ) : null}
                     </div>
                     {server.description && (
                       <p className="mt-1 truncate text-xs text-muted-foreground">
@@ -183,7 +193,7 @@ export function McpGrid({
                     <Switch
                       checked={isEnabled}
                       onCheckedChange={() => onToggleInstall?.(server.id)}
-                      disabled={isRowLoading}
+                      disabled={isRowLoading || server.force_enabled}
                     />
                   </div>
                 </div>

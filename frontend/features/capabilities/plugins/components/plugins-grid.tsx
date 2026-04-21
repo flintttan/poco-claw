@@ -145,6 +145,16 @@ export function PluginsGrid({
                           ? t("library.pluginsManager.scope.system")
                           : t("library.pluginsManager.scope.user")}
                       </Badge>
+                      {plugin.default_enabled && !plugin.force_enabled ? (
+                        <Badge variant="secondary" className="text-xs">
+                          {t("common.default")}
+                        </Badge>
+                      ) : null}
+                      {plugin.force_enabled ? (
+                        <Badge variant="destructive" className="text-xs">
+                          {t("common.forced")}
+                        </Badge>
+                      ) : null}
                     </div>
                     {plugin.description && (
                       <p className="text-xs text-muted-foreground mt-1 truncate">
@@ -169,7 +179,7 @@ export function PluginsGrid({
                       )}
                       <Switch
                         checked={install.enabled}
-                        disabled={isRowLoading}
+                        disabled={isRowLoading || plugin.force_enabled}
                         onCheckedChange={(enabled) =>
                           onToggleEnabled?.(install.id, enabled)
                         }
@@ -182,7 +192,9 @@ export function PluginsGrid({
                         disabled={isRowLoading}
                         onClick={() => onInstall?.(plugin.id)}
                       >
-                        {t("library.pluginsManager.actions.install")}
+                        {plugin.default_enabled || plugin.force_enabled
+                          ? t("common.enabled")
+                          : t("library.pluginsManager.actions.install")}
                       </Button>
                       {plugin.scope === "user" && (
                         <Button
