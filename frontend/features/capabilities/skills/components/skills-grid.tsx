@@ -245,6 +245,16 @@ export function SkillsGrid({
               >
                 {categoryLabel}
               </Badge>
+              {skill.default_enabled && !skill.force_enabled ? (
+                <Badge variant="secondary" className="text-xs">
+                  {t("common.default")}
+                </Badge>
+              ) : null}
+              {skill.force_enabled ? (
+                <Badge variant="destructive" className="text-xs">
+                  {t("common.forced")}
+                </Badge>
+              ) : null}
               {isAgentCreated && (
                 <Badge variant="secondary" className="text-xs">
                   {t("library.skillsManager.source.skillCreator")}
@@ -279,7 +289,7 @@ export function SkillsGrid({
               )}
               <Switch
                 checked={install.enabled}
-                disabled={isRowLoading}
+                disabled={isRowLoading || skill.force_enabled}
                 onCheckedChange={(enabled) =>
                   onToggleEnabled?.(install.id, enabled)
                 }
@@ -292,7 +302,9 @@ export function SkillsGrid({
                 disabled={isRowLoading}
                 onClick={() => onInstall?.(skill.id)}
               >
-                {t("library.skillsManager.actions.install")}
+                {skill.default_enabled || skill.force_enabled
+                  ? t("common.enabled")
+                  : t("library.skillsManager.actions.install")}
               </Button>
               {skill.scope === "user" && (
                 <Button
