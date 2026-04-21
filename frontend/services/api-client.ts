@@ -206,10 +206,17 @@ export const API_ENDPOINTS = {
   adminModelConfig: "/admin/model-config",
   adminSkills: "/admin/skills",
   adminSkill: (skillId: number) => `/admin/skills/${skillId}`,
+  adminSkillImportDiscover: "/admin/skills/import/discover",
+  adminSkillImportCommit: "/admin/skills/import/commit",
+  adminSkillImportJob: (jobId: string) => `/admin/skills/import/jobs/${jobId}`,
   adminMcpServers: "/admin/mcp-servers",
   adminMcpServer: (serverId: number) => `/admin/mcp-servers/${serverId}`,
   adminPlugins: "/admin/plugins",
   adminPlugin: (pluginId: number) => `/admin/plugins/${pluginId}`,
+  adminPluginImportDiscover: "/admin/plugins/import/discover",
+  adminPluginImportCommit: "/admin/plugins/import/commit",
+  adminPluginImportJob: (jobId: string) =>
+    `/admin/plugins/import/jobs/${jobId}`,
   adminSlashCommands: "/admin/slash-commands",
   adminSlashCommand: (commandId: number) =>
     `/admin/slash-commands/${commandId}`,

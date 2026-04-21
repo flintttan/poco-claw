@@ -14,11 +14,13 @@ import type {
   PluginCreateInput,
   PluginUpdateInput,
 } from "@/features/capabilities/plugins/types";
+import { PluginImportDialog } from "@/features/capabilities/plugins/components/plugin-import-dialog";
 import type { AdminPlugin } from "@/features/settings/api/admin-api";
+import { adminApi } from "@/features/settings/api/admin-api";
 import { useT } from "@/lib/i18n/client";
 
 import {
-  AdminCreateActions,
+  AdminEditActions,
   AdminItemActions,
   AdminLabeledInputField,
   AdminLabeledTextareaField,
@@ -67,6 +69,7 @@ export function AdminPluginsSection({
   const { t } = useT("translation");
   const [searchQuery, setSearchQuery] = React.useState("");
   const [dialogOpen, setDialogOpen] = React.useState(false);
+  const [importOpen, setImportOpen] = React.useState(false);
   const [editingPlugin, setEditingPlugin] = React.useState<AdminPlugin | null>(
     null,
   );
@@ -99,20 +102,6 @@ export function AdminPluginsSection({
     });
   }, [plugins, searchQuery]);
 
-  const openCreateDialog = React.useCallback(() => {
-    setEditingPlugin(null);
-    setPluginEditState({
-      name: "",
-      description: "",
-      version: "",
-      entry: "{}",
-      manifest: "{}",
-      defaultEnabled: false,
-      forceEnabled: false,
-    });
-    setDialogOpen(true);
-  }, []);
-
   const openEditDialog = React.useCallback((item: AdminPlugin) => {
     setEditingPlugin(item);
     setPluginEditState({
@@ -142,7 +131,7 @@ export function AdminPluginsSection({
         onSearchChange={setSearchQuery}
         searchPlaceholder={t("library.pluginsPage.searchPlaceholder")}
         createLabel={t("library.pluginsPage.addCard")}
-        onCreate={openCreateDialog}
+        onCreate={() => setImportOpen(true)}
       >
         {isLoading ? <AdminSectionLoading /> : null}
         {hasError ? <AdminSectionError onRetry={onRetry} /> : null}
@@ -196,7 +185,10 @@ export function AdminPluginsSection({
                 label={t("settings.admin.pluginNamePlaceholder")}
                 value={pluginEditState.name}
                 onChange={(value) =>
-                  setPluginEditState((current) => ({ ...current, name: value }))
+                  setPluginEditState((current) => ({
+                    ...current,
+                    name: value,
+                  }))
                 }
               />
               <AdminLabeledInputField
@@ -269,9 +261,10 @@ export function AdminPluginsSection({
             <AdminMaskedUpdateHint />
           </div>
           <DialogFooter>
-            <AdminCreateActions
+            <AdminEditActions
               isSaving={isSaving}
-              onCreate={async () => {
+              onCancel={closeDialog}
+              onSave={async () => {
                 const entryText = pluginEditState.entry.trim();
                 const manifestText = pluginEditState.manifest.trim();
                 const payload: PluginCreateInput = {
@@ -289,6 +282,7 @@ export function AdminPluginsSection({
                   default_enabled: pluginEditState.defaultEnabled,
                   force_enabled: pluginEditState.forceEnabled,
                 };
+
                 if (!editingPlugin) {
                   if (!payload.name) {
                     throw new Error(t("settings.admin.pluginNameRequired"));
@@ -307,6 +301,20 @@ export function AdminPluginsSection({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <PluginImportDialog
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onImported={async () => {
+          setImportOpen(false);
+          await onRetry();
+        }}
+        importApi={{
+          discover: adminApi.importSystemPluginDiscover,
+          commit: adminApi.importSystemPluginCommit,
+          getJob: adminApi.getSystemPluginImportJob,
+        }}
+      />
     </>
   );
 }

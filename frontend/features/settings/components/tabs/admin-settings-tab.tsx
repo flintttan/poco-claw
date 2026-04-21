@@ -58,7 +58,6 @@ export function AdminSettingsTab() {
     createEnvVar,
     updateEnvVar,
     deleteEnvVar,
-    createSkill,
     updateSkill,
     deleteSkill,
     createMcpServer,
@@ -282,10 +281,8 @@ export function AdminSettingsTab() {
           <AdminSkillsSection
             isLoading={sectionLoading.skills}
             hasError={sectionError.skills}
-            isSaving={sectionSaving.skills}
             skills={skills}
             onRetry={() => refreshScope("skills")}
-            onCreate={createSkill}
             onUpdate={updateSkill}
             onDelete={deleteSkill}
           />
