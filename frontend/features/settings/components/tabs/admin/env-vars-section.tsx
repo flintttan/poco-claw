@@ -1,5 +1,5 @@
 import * as React from "react";
-import { RefreshCw, Trash2 } from "lucide-react";
+import { KeySquare, RefreshCw, Trash2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,8 @@ import {
   ListItem,
   SectionCard,
 } from "./shared";
+
+const SKILLSMP_API_KEY = "SKILLSMP_API_KEY";
 
 interface EnvVarEditState {
   value: string;
@@ -80,6 +82,19 @@ export function AdminEnvVarsSection({
           isLoading || hasError ? "pointer-events-none opacity-60" : undefined
         }
       >
+        <div className="rounded-xl border border-border bg-muted/20 p-4">
+          <div className="flex items-start gap-3">
+            <div className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
+              <KeySquare className="size-4" />
+            </div>
+            <div className="min-w-0 space-y-1">
+              <div className="font-medium">{SKILLSMP_API_KEY}</div>
+              <div className="text-sm text-muted-foreground">
+                {t("settings.admin.skillsMpHelp")}
+              </div>
+            </div>
+          </div>
+        </div>
         <div className="grid gap-3 md:grid-cols-3">
           <Input
             value={newEnvKey}

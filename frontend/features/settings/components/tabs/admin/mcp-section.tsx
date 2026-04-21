@@ -1,8 +1,15 @@
+"use client";
+
 import * as React from "react";
 
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import type {
   McpServerCreateInput,
   McpServerUpdateInput,
@@ -12,22 +19,19 @@ import { useT } from "@/lib/i18n/client";
 
 import {
   AdminCreateActions,
-  AdminCreateGrid,
-  AdminEditActions,
   AdminItemActions,
   AdminLabeledInputField,
   AdminLabeledTextareaField,
   AdminMaskedUpdateHint,
   AdminPolicyHint,
   AdminPolicySwitchField,
-  AdminPolicySwitchInline,
   AdminSectionError,
   AdminSectionLoading,
   ListItem,
-  SectionCard,
   parseJsonObject,
   summarizeJson,
 } from "./shared";
+import { AdminCatalogShell } from "./admin-catalog-shell";
 
 interface McpEditState {
   name: string;
@@ -59,202 +63,204 @@ export function AdminMcpSection({
   onDelete,
 }: AdminMcpSectionProps) {
   const { t } = useT("translation");
-  const [newMcpName, setNewMcpName] = React.useState("");
-  const [newMcpDescription, setNewMcpDescription] = React.useState("");
-  const [newMcpConfig, setNewMcpConfig] = React.useState('{"mcpServers":{}}');
-  const [newDefaultEnabled, setNewDefaultEnabled] = React.useState(false);
-  const [newForceEnabled, setNewForceEnabled] = React.useState(false);
-  const [editingMcpId, setEditingMcpId] = React.useState<number | null>(null);
-  const [mcpEditState, setMcpEditState] = React.useState<McpEditState | null>(
-    null,
-  );
+  const [searchQuery, setSearchQuery] = React.useState("");
+  const [dialogOpen, setDialogOpen] = React.useState(false);
+  const [editingServer, setEditingServer] =
+    React.useState<AdminMcpServer | null>(null);
+  const [editState, setEditState] = React.useState<McpEditState>({
+    name: "",
+    description: "",
+    serverConfig: "{}",
+    defaultEnabled: false,
+    forceEnabled: false,
+  });
 
-  const resetEditingState = React.useCallback(() => {
-    setEditingMcpId(null);
-    setMcpEditState(null);
+  const filteredMcpServers = React.useMemo(() => {
+    if (!searchQuery) return mcpServers;
+    const lowerQuery = searchQuery.toLowerCase();
+    return mcpServers.filter((server) => {
+      return (
+        server.name.toLowerCase().includes(lowerQuery) ||
+        (server.description || "").toLowerCase().includes(lowerQuery) ||
+        JSON.stringify(server.masked_server_config || {})
+          .toLowerCase()
+          .includes(lowerQuery)
+      );
+    });
+  }, [mcpServers, searchQuery]);
+
+  const openCreateDialog = React.useCallback(() => {
+    setEditingServer(null);
+    setEditState({
+      name: "",
+      description: "",
+      serverConfig: '{"mcpServers":{}}',
+      defaultEnabled: false,
+      forceEnabled: false,
+    });
+    setDialogOpen(true);
+  }, []);
+
+  const openEditDialog = React.useCallback((item: AdminMcpServer) => {
+    setEditingServer(item);
+    setEditState({
+      name: item.name,
+      description: item.description ?? "",
+      serverConfig: "",
+      defaultEnabled: item.default_enabled,
+      forceEnabled: item.force_enabled,
+    });
+    setDialogOpen(true);
+  }, []);
+
+  const closeDialog = React.useCallback(() => {
+    setDialogOpen(false);
+    setEditingServer(null);
   }, []);
 
   return (
-    <SectionCard
-      title={t("settings.admin.mcpTitle")}
-      description={t("settings.admin.mcpDescription")}
-    >
-      {isLoading ? <AdminSectionLoading /> : null}
-      {hasError ? <AdminSectionError onRetry={onRetry} /> : null}
-      <div
-        className={
-          isLoading || hasError ? "pointer-events-none opacity-60" : undefined
-        }
+    <>
+      <AdminCatalogShell
+        title={t("settings.admin.mcpTitle")}
+        description={t("settings.admin.mcpDescription")}
+        summary={`${t("settings.admin.mcpTitle")} · ${filteredMcpServers.length}`}
+        searchValue={searchQuery}
+        onSearchChange={setSearchQuery}
+        searchPlaceholder={t("library.mcpLibrary.searchPlaceholder")}
+        createLabel={t("library.mcpLibrary.addCard", "Add MCP")}
+        onCreate={openCreateDialog}
       >
-        <AdminPolicyHint />
-        <AdminCreateGrid columns="three">
-          <Input
-            value={newMcpName}
-            onChange={(e) => setNewMcpName(e.target.value)}
-            placeholder={t("settings.admin.mcpNamePlaceholder")}
-          />
-          <Input
-            value={newMcpDescription}
-            onChange={(e) => setNewMcpDescription(e.target.value)}
-            placeholder={t("settings.admin.envDescriptionPlaceholder")}
-          />
-          <AdminCreateActions
-            isSaving={isSaving}
-            onCreate={async () => {
-              if (!newMcpName.trim()) {
-                throw new Error(t("settings.admin.mcpNameRequired"));
-              }
-              await onCreate({
-                name: newMcpName.trim(),
-                description: newMcpDescription || undefined,
-                server_config: parseJsonObject(
-                  newMcpConfig,
-                  t("settings.admin.invalidJsonObject"),
-                ),
-                default_enabled: newDefaultEnabled,
-                force_enabled: newForceEnabled,
-              });
-              setNewMcpName("");
-              setNewMcpDescription("");
-              setNewMcpConfig('{"mcpServers":{}}');
-              setNewDefaultEnabled(false);
-              setNewForceEnabled(false);
-            }}
-          />
-        </AdminCreateGrid>
-        <Textarea
-          value={newMcpConfig}
-          onChange={(e) => setNewMcpConfig(e.target.value)}
-          className="min-h-28"
-        />
-        <AdminCreateGrid columns="two">
-          <AdminPolicySwitchInline
-            label={t("settings.admin.policyDefaultEnabled")}
-            checked={newDefaultEnabled}
-            onCheckedChange={setNewDefaultEnabled}
-          />
-          <AdminPolicySwitchInline
-            label={t("settings.admin.policyForceEnabled")}
-            checked={newForceEnabled}
-            onCheckedChange={setNewForceEnabled}
-          />
-        </AdminCreateGrid>
-        <div className="rounded-lg border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
-          {t("settings.admin.mcpSecretHint")}
-        </div>
-        <div className="space-y-2">
-          {mcpServers.map((item) => (
-            <ListItem
-              key={item.id}
-              title={item.name}
-              description={
-                item.description || summarizeJson(item.masked_server_config)
-              }
-              badge={
-                item.has_sensitive_data ? (
-                  <Badge variant="outline">{t("settings.admin.masked")}</Badge>
-                ) : undefined
-              }
-              danger={
-                <AdminItemActions
-                  isSaving={isSaving}
-                  onEdit={() => {
-                    setEditingMcpId(item.id);
-                    setMcpEditState({
-                      name: item.name,
-                      description: item.description ?? "",
-                      serverConfig: "",
-                      defaultEnabled: item.default_enabled,
-                      forceEnabled: item.force_enabled,
-                    });
-                  }}
-                  onDelete={() => onDelete(item.id)}
-                />
-              }
-            >
-              {editingMcpId === item.id && mcpEditState ? (
-                <div className="space-y-3">
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <AdminLabeledInputField
-                      label={t("settings.admin.mcpNamePlaceholder")}
-                      value={mcpEditState.name}
-                      onChange={(value) =>
-                        setMcpEditState((current) =>
-                          current ? { ...current, name: value } : current,
-                        )
-                      }
-                    />
-                    <AdminLabeledInputField
-                      label={t("settings.admin.envDescriptionPlaceholder")}
-                      value={mcpEditState.description}
-                      onChange={(value) =>
-                        setMcpEditState((current) =>
-                          current
-                            ? { ...current, description: value }
-                            : current,
-                        )
-                      }
-                    />
-                    <AdminPolicySwitchField
-                      label={t("settings.admin.policyDefaultEnabled")}
-                      checked={mcpEditState.defaultEnabled}
-                      onCheckedChange={(checked) =>
-                        setMcpEditState((current) =>
-                          current
-                            ? { ...current, defaultEnabled: checked }
-                            : current,
-                        )
-                      }
-                    />
-                    <AdminPolicySwitchField
-                      label={t("settings.admin.policyForceEnabled")}
-                      checked={mcpEditState.forceEnabled}
-                      onCheckedChange={(checked) =>
-                        setMcpEditState((current) =>
-                          current
-                            ? { ...current, forceEnabled: checked }
-                            : current,
-                        )
-                      }
-                    />
-                  </div>
-                  <AdminLabeledTextareaField
-                    label={t("settings.admin.jsonConfig")}
-                    value={mcpEditState.serverConfig}
-                    onChange={(value) =>
-                      setMcpEditState((current) =>
-                        current ? { ...current, serverConfig: value } : current,
-                      )
-                    }
-                    className="min-h-32"
-                    placeholder={t("settings.admin.reenterConfigPlaceholder")}
-                  />
-                  <AdminMaskedUpdateHint />
-                  <AdminEditActions
+        {isLoading ? <AdminSectionLoading /> : null}
+        {hasError ? <AdminSectionError onRetry={onRetry} /> : null}
+        <div
+          className={
+            isLoading || hasError ? "pointer-events-none opacity-60" : undefined
+          }
+        >
+          <AdminPolicyHint />
+          <div className="space-y-2">
+            {filteredMcpServers.map((item) => (
+              <ListItem
+                key={item.id}
+                title={item.name}
+                description={
+                  item.description || summarizeJson(item.masked_server_config)
+                }
+                badge={
+                  item.has_sensitive_data ? (
+                    <Badge variant="outline">
+                      {t("settings.admin.masked")}
+                    </Badge>
+                  ) : undefined
+                }
+                danger={
+                  <AdminItemActions
                     isSaving={isSaving}
-                    onCancel={resetEditingState}
-                    onSave={async () => {
-                      await onUpdate(item.id, {
-                        name: mcpEditState.name,
-                        description: mcpEditState.description || undefined,
-                        server_config: mcpEditState.serverConfig.trim()
-                          ? parseJsonObject(
-                              mcpEditState.serverConfig,
-                              t("settings.admin.invalidJsonObject"),
-                            )
-                          : undefined,
-                        default_enabled: mcpEditState.defaultEnabled,
-                        force_enabled: mcpEditState.forceEnabled,
-                      });
-                      resetEditingState();
-                    }}
+                    onEdit={() => openEditDialog(item)}
+                    onDelete={() => onDelete(item.id)}
                   />
-                </div>
-              ) : null}
-            </ListItem>
-          ))}
+                }
+              />
+            ))}
+          </div>
         </div>
-      </div>
-    </SectionCard>
+      </AdminCatalogShell>
+
+      <Dialog open={dialogOpen} onOpenChange={(open) => !open && closeDialog()}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>
+              {editingServer
+                ? editingServer.name
+                : t("settings.admin.mcpTitle")}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="grid gap-3 md:grid-cols-2">
+              <AdminLabeledInputField
+                label={t("settings.admin.mcpNamePlaceholder")}
+                value={editState.name}
+                onChange={(value) =>
+                  setEditState((current) => ({ ...current, name: value }))
+                }
+              />
+              <AdminLabeledInputField
+                label={t("settings.admin.envDescriptionPlaceholder")}
+                value={editState.description}
+                onChange={(value) =>
+                  setEditState((current) => ({
+                    ...current,
+                    description: value,
+                  }))
+                }
+              />
+              <AdminPolicySwitchField
+                label={t("settings.admin.policyDefaultEnabled")}
+                checked={editState.defaultEnabled}
+                onCheckedChange={(checked) =>
+                  setEditState((current) => ({
+                    ...current,
+                    defaultEnabled: checked,
+                  }))
+                }
+              />
+              <AdminPolicySwitchField
+                label={t("settings.admin.policyForceEnabled")}
+                checked={editState.forceEnabled}
+                onCheckedChange={(checked) =>
+                  setEditState((current) => ({
+                    ...current,
+                    forceEnabled: checked,
+                  }))
+                }
+              />
+            </div>
+            <AdminLabeledTextareaField
+              label={t("settings.admin.jsonConfig")}
+              value={editState.serverConfig}
+              onChange={(value) =>
+                setEditState((current) => ({ ...current, serverConfig: value }))
+              }
+              className="min-h-32"
+              placeholder={t("settings.admin.reenterConfigPlaceholder")}
+            />
+            <AdminMaskedUpdateHint />
+          </div>
+          <DialogFooter>
+            <AdminCreateActions
+              isSaving={isSaving}
+              onCreate={async () => {
+                const serverConfigText = editState.serverConfig.trim();
+                const payload = {
+                  name: editState.name.trim(),
+                  description: editState.description || undefined,
+                  server_config: parseJsonObject(
+                    serverConfigText || "{}",
+                    t("settings.admin.invalidJsonObject"),
+                  ),
+                  default_enabled: editState.defaultEnabled,
+                  force_enabled: editState.forceEnabled,
+                };
+
+                if (!editingServer) {
+                  if (!payload.name) {
+                    throw new Error(t("settings.admin.mcpNameRequired"));
+                  }
+                  await onCreate(payload);
+                } else {
+                  await onUpdate(editingServer.id, {
+                    ...payload,
+                    server_config: serverConfigText
+                      ? payload.server_config
+                      : undefined,
+                  });
+                }
+                closeDialog();
+              }}
+            />
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
