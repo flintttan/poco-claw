@@ -1,8 +1,15 @@
+"use client";
+
 import * as React from "react";
 
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import type {
   PluginCreateInput,
   PluginUpdateInput,
@@ -12,22 +19,19 @@ import { useT } from "@/lib/i18n/client";
 
 import {
   AdminCreateActions,
-  AdminCreateGrid,
-  AdminEditActions,
   AdminItemActions,
   AdminLabeledInputField,
   AdminLabeledTextareaField,
   AdminMaskedUpdateHint,
   AdminPolicyHint,
   AdminPolicySwitchField,
-  AdminPolicySwitchInline,
   AdminSectionError,
   AdminSectionLoading,
   ListItem,
-  SectionCard,
   parseJsonObject,
   summarizeJson,
 } from "./shared";
+import { AdminCatalogShell } from "./admin-catalog-shell";
 
 interface PluginEditState {
   name: string;
@@ -61,253 +65,248 @@ export function AdminPluginsSection({
   onDelete,
 }: AdminPluginsSectionProps) {
   const { t } = useT("translation");
-  const [newPluginName, setNewPluginName] = React.useState("");
-  const [newPluginDescription, setNewPluginDescription] = React.useState("");
-  const [newPluginVersion, setNewPluginVersion] = React.useState("");
-  const [newPluginEntry, setNewPluginEntry] = React.useState("{}");
-  const [newPluginManifest, setNewPluginManifest] = React.useState("{}");
-  const [newDefaultEnabled, setNewDefaultEnabled] = React.useState(false);
-  const [newForceEnabled, setNewForceEnabled] = React.useState(false);
-  const [editingPluginId, setEditingPluginId] = React.useState<number | null>(
+  const [searchQuery, setSearchQuery] = React.useState("");
+  const [dialogOpen, setDialogOpen] = React.useState(false);
+  const [editingPlugin, setEditingPlugin] = React.useState<AdminPlugin | null>(
     null,
   );
-  const [pluginEditState, setPluginEditState] =
-    React.useState<PluginEditState | null>(null);
+  const [pluginEditState, setPluginEditState] = React.useState<PluginEditState>(
+    {
+      name: "",
+      description: "",
+      version: "",
+      entry: "{}",
+      manifest: "{}",
+      defaultEnabled: false,
+      forceEnabled: false,
+    },
+  );
 
-  const resetEditingState = React.useCallback(() => {
-    setEditingPluginId(null);
-    setPluginEditState(null);
+  const filteredPlugins = React.useMemo(() => {
+    if (!searchQuery) return plugins;
+    const lowerQuery = searchQuery.toLowerCase();
+    return plugins.filter((item) => {
+      return (
+        item.name.toLowerCase().includes(lowerQuery) ||
+        (item.description || "").toLowerCase().includes(lowerQuery) ||
+        JSON.stringify(item.masked_entry || {})
+          .toLowerCase()
+          .includes(lowerQuery) ||
+        JSON.stringify(item.masked_manifest || {})
+          .toLowerCase()
+          .includes(lowerQuery)
+      );
+    });
+  }, [plugins, searchQuery]);
+
+  const openCreateDialog = React.useCallback(() => {
+    setEditingPlugin(null);
+    setPluginEditState({
+      name: "",
+      description: "",
+      version: "",
+      entry: "{}",
+      manifest: "{}",
+      defaultEnabled: false,
+      forceEnabled: false,
+    });
+    setDialogOpen(true);
+  }, []);
+
+  const openEditDialog = React.useCallback((item: AdminPlugin) => {
+    setEditingPlugin(item);
+    setPluginEditState({
+      name: item.name,
+      description: item.description ?? "",
+      version: item.version ?? "",
+      entry: "",
+      manifest: "",
+      defaultEnabled: item.default_enabled,
+      forceEnabled: item.force_enabled,
+    });
+    setDialogOpen(true);
+  }, []);
+
+  const closeDialog = React.useCallback(() => {
+    setDialogOpen(false);
+    setEditingPlugin(null);
   }, []);
 
   return (
-    <SectionCard
-      title={t("settings.admin.pluginsTitle")}
-      description={t("settings.admin.pluginsDescription")}
-    >
-      {isLoading ? <AdminSectionLoading /> : null}
-      {hasError ? <AdminSectionError onRetry={onRetry} /> : null}
-      <div
-        className={
-          isLoading || hasError ? "pointer-events-none opacity-60" : undefined
-        }
+    <>
+      <AdminCatalogShell
+        title={t("settings.admin.pluginsTitle")}
+        description={t("settings.admin.pluginsDescription")}
+        summary={`${t("settings.admin.pluginsTitle")} · ${filteredPlugins.length}`}
+        searchValue={searchQuery}
+        onSearchChange={setSearchQuery}
+        searchPlaceholder={t("library.pluginsPage.searchPlaceholder")}
+        createLabel={t("library.pluginsPage.addCard")}
+        onCreate={openCreateDialog}
       >
-        <AdminPolicyHint />
-        <AdminCreateGrid columns="two">
-          <Input
-            value={newPluginName}
-            onChange={(e) => setNewPluginName(e.target.value)}
-            placeholder={t("settings.admin.pluginNamePlaceholder")}
-          />
-          <Input
-            value={newPluginDescription}
-            onChange={(e) => setNewPluginDescription(e.target.value)}
-            placeholder={t("settings.admin.envDescriptionPlaceholder")}
-          />
-          <Input
-            value={newPluginVersion}
-            onChange={(e) => setNewPluginVersion(e.target.value)}
-            placeholder={t("settings.admin.pluginVersionPlaceholder")}
-          />
-          <div className="flex justify-end md:col-span-1">
+        {isLoading ? <AdminSectionLoading /> : null}
+        {hasError ? <AdminSectionError onRetry={onRetry} /> : null}
+        <div
+          className={
+            isLoading || hasError ? "pointer-events-none opacity-60" : undefined
+          }
+        >
+          <AdminPolicyHint />
+          <div className="space-y-2">
+            {filteredPlugins.map((item) => (
+              <ListItem
+                key={item.id}
+                title={item.name}
+                description={
+                  item.description || summarizeJson(item.masked_entry)
+                }
+                badge={
+                  item.entry_has_sensitive_data ||
+                  item.manifest_has_sensitive_data ? (
+                    <Badge variant="outline">
+                      {t("settings.admin.masked")}
+                    </Badge>
+                  ) : undefined
+                }
+                danger={
+                  <AdminItemActions
+                    isSaving={isSaving}
+                    onEdit={() => openEditDialog(item)}
+                    onDelete={() => onDelete(item.id)}
+                  />
+                }
+              />
+            ))}
+          </div>
+        </div>
+      </AdminCatalogShell>
+
+      <Dialog open={dialogOpen} onOpenChange={(open) => !open && closeDialog()}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>
+              {editingPlugin
+                ? editingPlugin.name
+                : t("settings.admin.pluginsTitle")}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="grid gap-3 md:grid-cols-3">
+              <AdminLabeledInputField
+                label={t("settings.admin.pluginNamePlaceholder")}
+                value={pluginEditState.name}
+                onChange={(value) =>
+                  setPluginEditState((current) => ({ ...current, name: value }))
+                }
+              />
+              <AdminLabeledInputField
+                label={t("settings.admin.envDescriptionPlaceholder")}
+                value={pluginEditState.description}
+                onChange={(value) =>
+                  setPluginEditState((current) => ({
+                    ...current,
+                    description: value,
+                  }))
+                }
+              />
+              <AdminLabeledInputField
+                label={t("settings.admin.pluginVersionPlaceholder")}
+                value={pluginEditState.version}
+                onChange={(value) =>
+                  setPluginEditState((current) => ({
+                    ...current,
+                    version: value,
+                  }))
+                }
+              />
+              <AdminPolicySwitchField
+                label={t("settings.admin.policyDefaultEnabled")}
+                checked={pluginEditState.defaultEnabled}
+                onCheckedChange={(checked) =>
+                  setPluginEditState((current) => ({
+                    ...current,
+                    defaultEnabled: checked,
+                  }))
+                }
+              />
+              <AdminPolicySwitchField
+                label={t("settings.admin.policyForceEnabled")}
+                checked={pluginEditState.forceEnabled}
+                onCheckedChange={(checked) =>
+                  setPluginEditState((current) => ({
+                    ...current,
+                    forceEnabled: checked,
+                  }))
+                }
+              />
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <AdminLabeledTextareaField
+                label={t("settings.admin.pluginEntry")}
+                value={pluginEditState.entry}
+                onChange={(value) =>
+                  setPluginEditState((current) => ({
+                    ...current,
+                    entry: value,
+                  }))
+                }
+                className="min-h-32"
+                placeholder={t("settings.admin.reenterConfigPlaceholder")}
+              />
+              <AdminLabeledTextareaField
+                label={t("settings.admin.pluginManifest")}
+                value={pluginEditState.manifest}
+                onChange={(value) =>
+                  setPluginEditState((current) => ({
+                    ...current,
+                    manifest: value,
+                  }))
+                }
+                className="min-h-32"
+                placeholder={t("settings.admin.reenterConfigPlaceholder")}
+              />
+            </div>
+            <AdminMaskedUpdateHint />
+          </div>
+          <DialogFooter>
             <AdminCreateActions
               isSaving={isSaving}
               onCreate={async () => {
-                if (!newPluginName.trim()) {
-                  throw new Error(t("settings.admin.pluginNameRequired"));
-                }
-                await onCreate({
-                  name: newPluginName.trim(),
-                  description: newPluginDescription || undefined,
-                  version: newPluginVersion || undefined,
+                const entryText = pluginEditState.entry.trim();
+                const manifestText = pluginEditState.manifest.trim();
+                const payload: PluginCreateInput = {
+                  name: pluginEditState.name.trim(),
+                  description: pluginEditState.description || undefined,
+                  version: pluginEditState.version || undefined,
                   entry: parseJsonObject(
-                    newPluginEntry,
+                    entryText || "{}",
                     t("settings.admin.invalidJsonObject"),
                   ),
                   manifest: parseJsonObject(
-                    newPluginManifest,
+                    manifestText || "{}",
                     t("settings.admin.invalidJsonObject"),
                   ),
-                  default_enabled: newDefaultEnabled,
-                  force_enabled: newForceEnabled,
-                });
-                setNewPluginName("");
-                setNewPluginDescription("");
-                setNewPluginVersion("");
-                setNewPluginEntry("{}");
-                setNewPluginManifest("{}");
-                setNewDefaultEnabled(false);
-                setNewForceEnabled(false);
+                  default_enabled: pluginEditState.defaultEnabled,
+                  force_enabled: pluginEditState.forceEnabled,
+                };
+                if (!editingPlugin) {
+                  if (!payload.name) {
+                    throw new Error(t("settings.admin.pluginNameRequired"));
+                  }
+                  await onCreate(payload);
+                } else {
+                  await onUpdate(editingPlugin.id, {
+                    ...payload,
+                    entry: entryText ? payload.entry : undefined,
+                    manifest: manifestText ? payload.manifest : undefined,
+                  });
+                }
+                closeDialog();
               }}
             />
-          </div>
-        </AdminCreateGrid>
-        <AdminCreateGrid columns="two">
-          <Textarea
-            value={newPluginEntry}
-            onChange={(e) => setNewPluginEntry(e.target.value)}
-            className="min-h-24"
-            placeholder='{"s3_key":"..."}'
-          />
-          <Textarea
-            value={newPluginManifest}
-            onChange={(e) => setNewPluginManifest(e.target.value)}
-            className="min-h-24"
-            placeholder='{"name":"plugin-manifest"}'
-          />
-          <AdminPolicySwitchInline
-            label={t("settings.admin.policyDefaultEnabled")}
-            checked={newDefaultEnabled}
-            onCheckedChange={setNewDefaultEnabled}
-          />
-          <AdminPolicySwitchInline
-            label={t("settings.admin.policyForceEnabled")}
-            checked={newForceEnabled}
-            onCheckedChange={setNewForceEnabled}
-          />
-        </AdminCreateGrid>
-        <div className="space-y-2">
-          {plugins.map((item) => (
-            <ListItem
-              key={item.id}
-              title={item.name}
-              description={item.description || summarizeJson(item.masked_entry)}
-              badge={
-                item.entry_has_sensitive_data ||
-                item.manifest_has_sensitive_data ? (
-                  <Badge variant="outline">{t("settings.admin.masked")}</Badge>
-                ) : undefined
-              }
-              danger={
-                <AdminItemActions
-                  isSaving={isSaving}
-                  onEdit={() => {
-                    setEditingPluginId(item.id);
-                    setPluginEditState({
-                      name: item.name,
-                      description: item.description ?? "",
-                      version: item.version ?? "",
-                      entry: "",
-                      manifest: "",
-                      defaultEnabled: item.default_enabled,
-                      forceEnabled: item.force_enabled,
-                    });
-                  }}
-                  onDelete={() => onDelete(item.id)}
-                />
-              }
-            >
-              {editingPluginId === item.id && pluginEditState ? (
-                <div className="space-y-3">
-                  <div className="grid gap-3 md:grid-cols-3">
-                    <AdminLabeledInputField
-                      label={t("settings.admin.pluginNamePlaceholder")}
-                      value={pluginEditState.name}
-                      onChange={(value) =>
-                        setPluginEditState((current) =>
-                          current ? { ...current, name: value } : current,
-                        )
-                      }
-                    />
-                    <AdminLabeledInputField
-                      label={t("settings.admin.envDescriptionPlaceholder")}
-                      value={pluginEditState.description}
-                      onChange={(value) =>
-                        setPluginEditState((current) =>
-                          current
-                            ? { ...current, description: value }
-                            : current,
-                        )
-                      }
-                    />
-                    <AdminLabeledInputField
-                      label={t("settings.admin.pluginVersionPlaceholder")}
-                      value={pluginEditState.version}
-                      onChange={(value) =>
-                        setPluginEditState((current) =>
-                          current ? { ...current, version: value } : current,
-                        )
-                      }
-                    />
-                    <AdminPolicySwitchField
-                      label={t("settings.admin.policyDefaultEnabled")}
-                      checked={pluginEditState.defaultEnabled}
-                      onCheckedChange={(checked) =>
-                        setPluginEditState((current) =>
-                          current
-                            ? { ...current, defaultEnabled: checked }
-                            : current,
-                        )
-                      }
-                    />
-                    <AdminPolicySwitchField
-                      label={t("settings.admin.policyForceEnabled")}
-                      checked={pluginEditState.forceEnabled}
-                      onCheckedChange={(checked) =>
-                        setPluginEditState((current) =>
-                          current
-                            ? { ...current, forceEnabled: checked }
-                            : current,
-                        )
-                      }
-                    />
-                  </div>
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <AdminLabeledTextareaField
-                      label={t("settings.admin.pluginEntry")}
-                      value={pluginEditState.entry}
-                      onChange={(value) =>
-                        setPluginEditState((current) =>
-                          current ? { ...current, entry: value } : current,
-                        )
-                      }
-                      className="min-h-32"
-                      placeholder={t("settings.admin.reenterConfigPlaceholder")}
-                    />
-                    <AdminLabeledTextareaField
-                      label={t("settings.admin.pluginManifest")}
-                      value={pluginEditState.manifest}
-                      onChange={(value) =>
-                        setPluginEditState((current) =>
-                          current ? { ...current, manifest: value } : current,
-                        )
-                      }
-                      className="min-h-32"
-                      placeholder={t("settings.admin.reenterConfigPlaceholder")}
-                    />
-                  </div>
-                  <AdminMaskedUpdateHint />
-                  <AdminEditActions
-                    isSaving={isSaving}
-                    onCancel={resetEditingState}
-                    onSave={async () => {
-                      await onUpdate(item.id, {
-                        name: pluginEditState.name,
-                        description: pluginEditState.description || undefined,
-                        version: pluginEditState.version || undefined,
-                        entry: pluginEditState.entry.trim()
-                          ? parseJsonObject(
-                              pluginEditState.entry,
-                              t("settings.admin.invalidJsonObject"),
-                            )
-                          : undefined,
-                        manifest: pluginEditState.manifest.trim()
-                          ? parseJsonObject(
-                              pluginEditState.manifest,
-                              t("settings.admin.invalidJsonObject"),
-                            )
-                          : undefined,
-                        default_enabled: pluginEditState.defaultEnabled,
-                        force_enabled: pluginEditState.forceEnabled,
-                      });
-                      resetEditingState();
-                    }}
-                  />
-                </div>
-              ) : null}
-            </ListItem>
-          ))}
-        </div>
-      </div>
-    </SectionCard>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

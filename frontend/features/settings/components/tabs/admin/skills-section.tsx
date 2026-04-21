@@ -1,5 +1,14 @@
+"use client";
+
 import * as React from "react";
 
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import type {
@@ -11,28 +20,26 @@ import { useT } from "@/lib/i18n/client";
 
 import {
   AdminCreateActions,
-  AdminCreateGrid,
-  AdminEditActions,
   AdminItemActions,
-  AdminLabeledInputField,
-  AdminLabeledTextareaField,
   AdminPolicyHint,
-  AdminPolicySwitchField,
-  AdminPolicySwitchInline,
   AdminSectionError,
   AdminSectionLoading,
   ListItem,
-  SectionCard,
   parseJsonObject,
   summarizeJson,
 } from "./shared";
+import { AdminCatalogShell } from "./admin-catalog-shell";
 
 interface SkillEditState {
   name: string;
   description: string;
   entry: string;
-  defaultEnabled: boolean;
-  forceEnabled: boolean;
+}
+
+interface SkillCreateState {
+  name: string;
+  description: string;
+  entry: string;
 }
 
 interface AdminSkillsSectionProps {
@@ -57,188 +64,205 @@ export function AdminSkillsSection({
   onDelete,
 }: AdminSkillsSectionProps) {
   const { t } = useT("translation");
-  const [newSkillName, setNewSkillName] = React.useState("");
-  const [newSkillDescription, setNewSkillDescription] = React.useState("");
-  const [newSkillEntry, setNewSkillEntry] = React.useState("{}");
-  const [newDefaultEnabled, setNewDefaultEnabled] = React.useState(false);
-  const [newForceEnabled, setNewForceEnabled] = React.useState(false);
-  const [editingSkillId, setEditingSkillId] = React.useState<number | null>(
-    null,
-  );
-  const [skillEditState, setSkillEditState] =
-    React.useState<SkillEditState | null>(null);
+  const [searchQuery, setSearchQuery] = React.useState("");
+  const [createOpen, setCreateOpen] = React.useState(false);
+  const [editSkill, setEditSkill] = React.useState<Skill | null>(null);
 
-  const resetEditingState = React.useCallback(() => {
-    setEditingSkillId(null);
-    setSkillEditState(null);
-  }, []);
+  const [createState, setCreateState] = React.useState<SkillCreateState>({
+    name: "",
+    description: "",
+    entry: "{}",
+  });
+  const [editState, setEditState] = React.useState<SkillEditState>({
+    name: "",
+    description: "",
+    entry: "{}",
+  });
+
+  const filteredSkills = React.useMemo(() => {
+    if (!searchQuery) return skills;
+    const lowerQuery = searchQuery.toLowerCase();
+    return skills.filter((skill) => {
+      return (
+        skill.name.toLowerCase().includes(lowerQuery) ||
+        (skill.description || "").toLowerCase().includes(lowerQuery) ||
+        JSON.stringify(skill.entry || {})
+          .toLowerCase()
+          .includes(lowerQuery)
+      );
+    });
+  }, [searchQuery, skills]);
+
+  React.useEffect(() => {
+    if (!editSkill) return;
+    setEditState({
+      name: editSkill.name,
+      description: editSkill.description ?? "",
+      entry: JSON.stringify(editSkill.entry ?? {}, null, 2),
+    });
+  }, [editSkill]);
 
   return (
-    <SectionCard
-      title={t("settings.admin.skillsTitle")}
-      description={t("settings.admin.skillsDescription")}
-    >
-      {isLoading ? <AdminSectionLoading /> : null}
-      {hasError ? <AdminSectionError onRetry={onRetry} /> : null}
-      <div
-        className={
-          isLoading || hasError ? "pointer-events-none opacity-60" : undefined
-        }
+    <>
+      <AdminCatalogShell
+        title={t("settings.admin.skillsTitle")}
+        description={t("settings.admin.skillsDescription")}
+        summary={`${t("settings.admin.skillsTitle")} · ${filteredSkills.length}`}
+        searchValue={searchQuery}
+        onSearchChange={setSearchQuery}
+        searchPlaceholder={t("library.skillsPage.searchPlaceholder")}
+        createLabel={t("library.skillsPage.addCard")}
+        onCreate={() => setCreateOpen(true)}
       >
-        <AdminPolicyHint />
-        <AdminCreateGrid columns="two">
-          <Input
-            value={newSkillName}
-            onChange={(e) => setNewSkillName(e.target.value)}
-            placeholder={t("settings.admin.skillNamePlaceholder")}
-          />
-          <Input
-            value={newSkillDescription}
-            onChange={(e) => setNewSkillDescription(e.target.value)}
-            placeholder={t("settings.admin.envDescriptionPlaceholder")}
-          />
-          <Textarea
-            value={newSkillEntry}
-            onChange={(e) => setNewSkillEntry(e.target.value)}
-            className="min-h-24"
-            placeholder='{"s3_key":"..."}'
-          />
-          <AdminPolicySwitchInline
-            label={t("settings.admin.policyDefaultEnabled")}
-            checked={newDefaultEnabled}
-            onCheckedChange={setNewDefaultEnabled}
-          />
-          <AdminPolicySwitchInline
-            label={t("settings.admin.policyForceEnabled")}
-            checked={newForceEnabled}
-            onCheckedChange={setNewForceEnabled}
-          />
-          <AdminCreateActions
-            isSaving={isSaving}
-            onCreate={async () => {
-              if (!newSkillName.trim()) {
-                throw new Error(t("settings.admin.skillNameRequired"));
-              }
-              await onCreate({
-                name: newSkillName.trim(),
-                description: newSkillDescription || undefined,
-                entry: parseJsonObject(
-                  newSkillEntry,
-                  t("settings.admin.invalidJsonObject"),
-                ),
-                default_enabled: newDefaultEnabled,
-                force_enabled: newForceEnabled,
-              });
-              setNewSkillName("");
-              setNewSkillDescription("");
-              setNewSkillEntry("{}");
-              setNewDefaultEnabled(false);
-              setNewForceEnabled(false);
-            }}
-          />
-        </AdminCreateGrid>
-        <div className="space-y-2">
-          {skills.map((item) => (
-            <ListItem
-              key={item.id}
-              title={item.name}
-              description={item.description || summarizeJson(item.entry)}
-              danger={
-                <AdminItemActions
-                  isSaving={isSaving}
-                  onEdit={() => {
-                    setEditingSkillId(item.id);
-                    setSkillEditState({
-                      name: item.name,
-                      description: item.description ?? "",
-                      entry: JSON.stringify(item.entry ?? {}, null, 2),
-                      defaultEnabled: item.default_enabled,
-                      forceEnabled: item.force_enabled,
-                    });
-                  }}
-                  onDelete={() => onDelete(item.id)}
-                />
-              }
-            >
-              {editingSkillId === item.id && skillEditState ? (
-                <div className="space-y-3">
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <AdminLabeledInputField
-                      label={t("settings.admin.skillNamePlaceholder")}
-                      value={skillEditState.name}
-                      onChange={(value) =>
-                        setSkillEditState((current) =>
-                          current ? { ...current, name: value } : current,
-                        )
-                      }
-                    />
-                    <AdminLabeledInputField
-                      label={t("settings.admin.envDescriptionPlaceholder")}
-                      value={skillEditState.description}
-                      onChange={(value) =>
-                        setSkillEditState((current) =>
-                          current
-                            ? { ...current, description: value }
-                            : current,
-                        )
-                      }
-                    />
-                    <AdminPolicySwitchField
-                      label={t("settings.admin.policyDefaultEnabled")}
-                      checked={skillEditState.defaultEnabled}
-                      onCheckedChange={(checked) =>
-                        setSkillEditState((current) =>
-                          current
-                            ? { ...current, defaultEnabled: checked }
-                            : current,
-                        )
-                      }
-                    />
-                    <AdminPolicySwitchField
-                      label={t("settings.admin.policyForceEnabled")}
-                      checked={skillEditState.forceEnabled}
-                      onCheckedChange={(checked) =>
-                        setSkillEditState((current) =>
-                          current
-                            ? { ...current, forceEnabled: checked }
-                            : current,
-                        )
-                      }
-                    />
-                  </div>
-                  <AdminLabeledTextareaField
-                    label={t("settings.admin.jsonConfig")}
-                    value={skillEditState.entry}
-                    onChange={(value) =>
-                      setSkillEditState((current) =>
-                        current ? { ...current, entry: value } : current,
-                      )
-                    }
-                    className="min-h-32"
-                  />
-                  <AdminEditActions
+        {isLoading ? <AdminSectionLoading /> : null}
+        {hasError ? <AdminSectionError onRetry={onRetry} /> : null}
+        <div
+          className={
+            isLoading || hasError ? "pointer-events-none opacity-60" : undefined
+          }
+        >
+          <AdminPolicyHint />
+          <div className="space-y-2">
+            {filteredSkills.map((item) => (
+              <ListItem
+                key={item.id}
+                title={item.name}
+                description={item.description || summarizeJson(item.entry)}
+                danger={
+                  <AdminItemActions
                     isSaving={isSaving}
-                    onCancel={resetEditingState}
-                    onSave={async () => {
-                      await onUpdate(item.id, {
-                        name: skillEditState.name,
-                        description: skillEditState.description || undefined,
-                        entry: parseJsonObject(
-                          skillEditState.entry,
-                          t("settings.admin.invalidJsonObject"),
-                        ),
-                        default_enabled: skillEditState.defaultEnabled,
-                        force_enabled: skillEditState.forceEnabled,
-                      });
-                      resetEditingState();
-                    }}
+                    onEdit={() => setEditSkill(item)}
+                    onDelete={() => onDelete(item.id)}
                   />
-                </div>
-              ) : null}
-            </ListItem>
-          ))}
+                }
+              />
+            ))}
+          </div>
         </div>
-      </div>
-    </SectionCard>
+      </AdminCatalogShell>
+
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t("settings.admin.skillsTitle")}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Input
+              value={createState.name}
+              onChange={(e) =>
+                setCreateState((current) => ({
+                  ...current,
+                  name: e.target.value,
+                }))
+              }
+              placeholder={t("settings.admin.skillNamePlaceholder")}
+            />
+            <Input
+              value={createState.description}
+              onChange={(e) =>
+                setCreateState((current) => ({
+                  ...current,
+                  description: e.target.value,
+                }))
+              }
+              placeholder={t("settings.admin.envDescriptionPlaceholder")}
+            />
+            <Textarea
+              value={createState.entry}
+              onChange={(e) =>
+                setCreateState((current) => ({
+                  ...current,
+                  entry: e.target.value,
+                }))
+              }
+              className="min-h-24"
+              placeholder='{"s3_key":"..."}'
+            />
+          </div>
+          <DialogFooter>
+            <AdminCreateActions
+              isSaving={isSaving}
+              onCreate={async () => {
+                if (!createState.name.trim()) {
+                  throw new Error(t("settings.admin.skillNameRequired"));
+                }
+                await onCreate({
+                  name: createState.name.trim(),
+                  description: createState.description || undefined,
+                  entry: parseJsonObject(
+                    createState.entry,
+                    t("settings.admin.invalidJsonObject"),
+                  ),
+                });
+                setCreateOpen(false);
+                setCreateState({ name: "", description: "", entry: "{}" });
+              }}
+            />
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={editSkill !== null}
+        onOpenChange={(open) => {
+          if (!open) setEditSkill(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t("settings.admin.edit")}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Input
+              value={editState.name}
+              onChange={(e) =>
+                setEditState((current) => ({
+                  ...current,
+                  name: e.target.value,
+                }))
+              }
+              placeholder={t("settings.admin.skillNamePlaceholder")}
+            />
+            <Input
+              value={editState.description}
+              onChange={(e) =>
+                setEditState((current) => ({
+                  ...current,
+                  description: e.target.value,
+                }))
+              }
+              placeholder={t("settings.admin.envDescriptionPlaceholder")}
+            />
+            <Textarea
+              value={editState.entry}
+              onChange={(e) =>
+                setEditState((current) => ({
+                  ...current,
+                  entry: e.target.value,
+                }))
+              }
+              className="min-h-24"
+            />
+          </div>
+          <DialogFooter>
+            <AdminCreateActions
+              isSaving={isSaving}
+              onCreate={async () => {
+                if (!editSkill) return;
+                await onUpdate(editSkill.id, {
+                  name: editState.name,
+                  description: editState.description || undefined,
+                  entry: parseJsonObject(
+                    editState.entry,
+                    t("settings.admin.invalidJsonObject"),
+                  ),
+                });
+                setEditSkill(null);
+              }}
+            />
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

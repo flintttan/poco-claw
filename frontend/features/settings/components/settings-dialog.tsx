@@ -10,7 +10,6 @@ import {
   Languages,
   LogOut,
   Palette,
-  Shield,
   Sparkles,
   SlidersHorizontal,
   User,
@@ -44,7 +43,6 @@ import { useThemeMode, type ThemeMode } from "@/hooks/use-theme-mode";
 import { SettingsSidebar } from "@/features/settings/components/settings-sidebar";
 import { AccountSettingsTab } from "@/features/settings/components/tabs/account-settings-tab";
 import { ShortcutsSettingsTab } from "@/features/settings/components/tabs/shortcuts-settings-tab";
-import { AdminSettingsTab } from "@/features/settings/components/tabs/admin-settings-tab";
 import {
   UsageSettingsTab,
   UsageToolbar,
@@ -92,7 +90,6 @@ export function SettingsDialog({
   const { backend, setBackend } = useBackendPreference();
   const { currentLanguage, changeLanguage } = useSettingsLanguage();
   const { profile, credits, isLoading, logout } = useUserAccount();
-  const isSystemAdmin = profile?.systemRole === "admin";
 
   const [activeTab, setActiveTab] = React.useState<SettingsTabId>(
     tabRequest?.tab ?? "account",
@@ -204,15 +201,8 @@ export function SettingsDialog({
         id: "shortcuts",
       },
     ];
-    if (isSystemAdmin) {
-      items.push({
-        icon: Shield,
-        label: t("settings.sidebar.admin"),
-        id: "admin",
-      });
-    }
     return items;
-  }, [isSystemAdmin, t]);
+  }, [t]);
 
   const activeTitle = React.useMemo(
     () => sidebarItems.find((item) => item.id === activeTab)?.label,
@@ -305,12 +295,7 @@ export function SettingsDialog({
       return;
     }
 
-    if (
-      view === "account" ||
-      view === "usage" ||
-      view === "shortcuts" ||
-      view === "admin"
-    ) {
+    if (view === "account" || view === "usage" || view === "shortcuts") {
       setActiveTab(view);
     }
 
@@ -346,10 +331,6 @@ export function SettingsDialog({
           showInlineToolbar={isMobile}
         />
       );
-    }
-
-    if (activeTab === "admin") {
-      return <AdminSettingsTab />;
     }
 
     return <ShortcutsSettingsTab />;
