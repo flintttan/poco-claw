@@ -34,6 +34,16 @@ import {
 } from "./shared";
 import { AdminCatalogShell } from "./admin-catalog-shell";
 
+const DEFAULT_MCP_CONFIG = `{
+  "mcpServers": {
+    "server-name": {
+      "command": "npx",
+      "args": ["-y", "your-mcp-server"],
+      "env": {}
+    }
+  }
+}`;
+
 interface McpEditState {
   name: string;
   description: string;
@@ -95,7 +105,7 @@ export function AdminMcpSection({
     setEditState({
       name: "",
       description: "",
-      serverConfig: '{"mcpServers":{}}',
+      serverConfig: DEFAULT_MCP_CONFIG,
       defaultEnabled: false,
       forceEnabled: false,
     });
@@ -107,7 +117,7 @@ export function AdminMcpSection({
     setEditState({
       name: item.name,
       description: item.description ?? "",
-      serverConfig: "",
+      serverConfig: JSON.stringify(item.masked_server_config || {}, null, 2),
       defaultEnabled: item.default_enabled,
       forceEnabled: item.force_enabled,
     });
@@ -223,7 +233,7 @@ export function AdminMcpSection({
                 setEditState((current) => ({ ...current, serverConfig: value }))
               }
               className="min-h-32"
-              placeholder={t("settings.admin.reenterConfigPlaceholder")}
+              placeholder={DEFAULT_MCP_CONFIG}
             />
             <AdminMaskedUpdateHint />
           </div>
