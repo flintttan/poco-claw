@@ -163,3 +163,11 @@ export interface SkillImportApi {
   ) => Promise<SkillImportCommitEnqueueResponse>;
   getJob: (jobId: string) => Promise<SkillImportJobStatusResponse>;
 }
+
+export interface SkillImportServiceLike {
+  importDiscover?: (formData: FormData) => Promise<SkillImportDiscoverResponse>;
+  importCommit?: (
+    input: SkillImportCommitInput,
+  ) => Promise<SkillImportCommitEnqueueResponse>;
+  getImportJob?: (jobId: string) => Promise<SkillImportJobStatusResponse>;
+}
