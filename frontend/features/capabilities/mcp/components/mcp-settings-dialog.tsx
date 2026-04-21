@@ -17,6 +17,16 @@ import { useT } from "@/lib/i18n/client";
 import type { McpDisplayItem } from "@/features/capabilities/mcp/hooks/use-mcp-catalog";
 import { CapabilityDialogContent } from "@/features/capabilities/components/capability-dialog-content";
 
+const DEFAULT_MCP_CONFIG = `{
+  "mcpServers": {
+    "server-name": {
+      "command": "npx",
+      "args": ["-y", "your-mcp-server"],
+      "env": {}
+    }
+  }
+}`;
+
 type ValidationItem = {
   path: string;
   message: string;
@@ -59,6 +69,7 @@ interface McpSettingsDialogProps {
   item: McpDisplayItem | null;
   open: boolean;
   isNew?: boolean;
+  readOnly?: boolean;
   onClose: () => void;
   onSave: (payload: {
     serverId?: number;
@@ -72,6 +83,7 @@ export function McpSettingsDialog({
   item,
   open,
   isNew = false,
+  readOnly = false,
   onClose,
   onSave,
 }: McpSettingsDialogProps) {
@@ -92,7 +104,7 @@ export function McpSettingsDialog({
       setName(item.server.name || "");
       setDescription(item.server.description || "");
     } else if (isNew) {
-      setJsonConfig("{}");
+      setJsonConfig(DEFAULT_MCP_CONFIG);
       setName("");
       setDescription("");
     }
@@ -130,7 +142,7 @@ export function McpSettingsDialog({
             </Button>
             <Button
               className="w-full"
-              disabled={isSaving}
+              disabled={isSaving || readOnly}
               onClick={() => {
                 if (isSaving) return;
                 setSaveError(null);
@@ -144,6 +156,10 @@ export function McpSettingsDialog({
                     const trimmedDescription = description.trim();
                     if (isNew && !trimmedName) {
                       setSaveError(t("mcpSettings.nameRequired"));
+                      return;
+                    }
+                    if (readOnly) {
+                      onClose();
                       return;
                     }
                     await onSave({
@@ -184,7 +200,7 @@ export function McpSettingsDialog({
             </Label>
             <Input
               value={name}
-              disabled={!isNew}
+              disabled={!isNew || readOnly}
               onChange={(e) => {
                 setName(e.target.value);
                 if (saveError || validationItems.length > 0) {
@@ -202,6 +218,7 @@ export function McpSettingsDialog({
             </Label>
             <Input
               value={description}
+              disabled={readOnly}
               onChange={(e) => {
                 setDescription(e.target.value);
                 if (saveError || validationItems.length > 0) {
@@ -221,8 +238,15 @@ export function McpSettingsDialog({
             <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
               {t("mcpSettings.fullJsonConfig")}
             </Label>
+            <p className="text-xs text-muted-foreground">
+              {t(
+                "mcpSettings.fullJsonConfigHint",
+                'Paste a Claude-style MCP config, e.g. {"mcpServers": {...}}',
+              )}
+            </p>
             <Textarea
               value={jsonConfig}
+              disabled={readOnly}
               onChange={(e) => {
                 setJsonConfig(e.target.value);
                 if (saveError || validationItems.length > 0) {
