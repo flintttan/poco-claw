@@ -17,6 +17,16 @@ import { useT } from "@/lib/i18n/client";
 import type { McpDisplayItem } from "@/features/capabilities/mcp/hooks/use-mcp-catalog";
 import { CapabilityDialogContent } from "@/features/capabilities/components/capability-dialog-content";
 
+const DEFAULT_MCP_CONFIG = `{
+  "mcpServers": {
+    "server-name": {
+      "command": "npx",
+      "args": ["-y", "your-mcp-server"],
+      "env": {}
+    }
+  }
+}`;
+
 type ValidationItem = {
   path: string;
   message: string;
@@ -92,7 +102,7 @@ export function McpSettingsDialog({
       setName(item.server.name || "");
       setDescription(item.server.description || "");
     } else if (isNew) {
-      setJsonConfig("{}");
+      setJsonConfig(DEFAULT_MCP_CONFIG);
       setName("");
       setDescription("");
     }
@@ -221,6 +231,12 @@ export function McpSettingsDialog({
             <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
               {t("mcpSettings.fullJsonConfig")}
             </Label>
+            <p className="text-xs text-muted-foreground">
+              {t(
+                "mcpSettings.fullJsonConfigHint",
+                'Paste a Claude-style MCP config, e.g. {"mcpServers": {...}}',
+              )}
+            </p>
             <Textarea
               value={jsonConfig}
               onChange={(e) => {
