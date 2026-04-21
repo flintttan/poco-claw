@@ -1,8 +1,8 @@
 from functools import lru_cache
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -44,7 +44,7 @@ class Settings(BaseSettings):
     github_client_secret: str | None = Field(default=None, alias="GITHUB_CLIENT_SECRET")
     single_user_id: str = Field(default="default", alias="SINGLE_USER_ID")
     single_user_name: str = Field(default="Local User", alias="SINGLE_USER_NAME")
-    system_admin_emails: list[str] = Field(
+    system_admin_emails: Annotated[list[str], NoDecode] = Field(
         default_factory=list, alias="SYSTEM_ADMIN_EMAILS"
     )
     internal_api_token: str = Field(
