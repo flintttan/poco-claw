@@ -189,7 +189,15 @@ export function SkillImportDialog({
   const [commitError, setCommitError] = useState<string | null>(null);
   const [, setCommitResult] = useState<SkillImportCommitResponse | null>(null);
   const initialDiscoverAppliedArchiveKeyRef = React.useRef<string | null>(null);
-  const api = importApi ?? skillsService;
+  const api = React.useMemo<SkillImportApi>(
+    () =>
+      importApi ?? {
+        discover: skillsService.importDiscover,
+        commit: skillsService.importCommit,
+        getJob: skillsService.getImportJob,
+      },
+    [importApi],
+  );
 
   const isActiveRef = React.useRef(true);
   React.useEffect(() => {

@@ -62,7 +62,15 @@ export function PluginImportDialog({
   const [commitError, setCommitError] = useState<string | null>(null);
   const [commitResult, setCommitResult] =
     useState<PluginImportCommitResponse | null>(null);
-  const api = importApi ?? pluginsService;
+  const api = React.useMemo<PluginImportApi>(
+    () =>
+      importApi ?? {
+        discover: pluginsService.importDiscover,
+        commit: pluginsService.importCommit,
+        getJob: pluginsService.getImportJob,
+      },
+    [importApi],
+  );
 
   const isActiveRef = React.useRef(true);
   React.useEffect(() => {

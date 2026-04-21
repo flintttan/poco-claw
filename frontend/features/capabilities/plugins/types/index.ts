@@ -126,3 +126,13 @@ export interface PluginImportApi {
   ) => Promise<PluginImportCommitEnqueueResponse>;
   getJob: (jobId: string) => Promise<PluginImportJobStatusResponse>;
 }
+
+export interface PluginImportServiceLike {
+  importDiscover?: (
+    formData: FormData,
+  ) => Promise<PluginImportDiscoverResponse>;
+  importCommit?: (
+    input: PluginImportCommitInput,
+  ) => Promise<PluginImportCommitEnqueueResponse>;
+  getImportJob?: (jobId: string) => Promise<PluginImportJobStatusResponse>;
+}
