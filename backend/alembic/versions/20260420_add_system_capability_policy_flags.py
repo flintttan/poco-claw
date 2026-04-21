@@ -1,7 +1,7 @@
 """add system capability policy flags
 
-Revision ID: 20260420_add_system_capability_policy_flags
-Revises: 20260420_add_system_role
+Revision ID: 20260420_cap_policy_flags
+Revises: 20260420_sys_role
 Create Date: 2026-04-20 00:30:00.000000
 """
 
@@ -10,8 +10,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = "20260420_add_system_capability_policy_flags"
-down_revision = "20260420_add_system_role"
+revision = "20260420_cap_policy_flags"
+down_revision = "20260420_sys_role"
 branch_labels = None
 depends_on = None
 
