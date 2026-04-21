@@ -113,6 +113,7 @@ export function McpPageClient() {
                 installs={installs}
                 loadingId={loadingId}
                 isLoading={isLoading}
+                displayMode="runtime"
                 onToggleInstall={toggleInstall}
                 onDeleteServer={deleteServer}
                 onEditServer={(server) => setSelectedServer(server)}
@@ -131,6 +132,7 @@ export function McpPageClient() {
           item={activeItem}
           open={Boolean(activeItem || isCreating)}
           isNew={isCreating}
+          readOnly={Boolean(activeItem) && !isCreating}
           onClose={() => {
             setSelectedServer(null);
             setIsCreating(false);

@@ -112,6 +112,7 @@ export function PluginsPageClient() {
                 installs={installs}
                 loadingId={loadingId}
                 isLoading={isLoading}
+                displayMode="runtime"
                 onInstall={installPlugin}
                 onDeletePlugin={deletePlugin}
                 onToggleEnabled={setEnabled}

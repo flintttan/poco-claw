@@ -120,6 +120,7 @@ export function SkillsPageClient() {
                 installs={installs}
                 loadingId={loadingId}
                 isLoading={isLoading}
+                displayMode="runtime"
                 onInstall={installSkill}
                 onDeleteSkill={deleteSkill}
                 onOpenSkillSettings={(skill) => setSelectedSkillId(skill.id)}

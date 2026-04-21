@@ -24,6 +24,7 @@ interface McpGridProps {
   installs: UserMcpInstall[];
   loadingId?: number | null;
   isLoading?: boolean;
+  displayMode?: "personal" | "runtime" | "admin";
   onToggleInstall?: (serverId: number) => void;
   onDeleteServer?: (serverId: number) => void;
   onEditServer?: (server: McpServer) => void;
@@ -38,6 +39,7 @@ export function McpGrid({
   installs,
   loadingId,
   isLoading = false,
+  displayMode = "personal",
   onToggleInstall,
   onDeleteServer,
   onEditServer,
@@ -58,6 +60,15 @@ export function McpGrid({
   }, [installs]);
 
   const enabledCount = installs.filter((c) => c.enabled).length;
+  const visibleServers = React.useMemo(() => {
+    if (displayMode === "admin") {
+      return servers.filter((server) => server.scope === "system");
+    }
+    if (displayMode === "personal") {
+      return servers.filter((server) => server.scope !== "system");
+    }
+    return servers;
+  }, [displayMode, servers]);
 
   return (
     <div className="space-y-6">
@@ -102,13 +113,13 @@ export function McpGrid({
 
         {isLoading && servers.length === 0 ? (
           <SkeletonShimmer count={5} itemClassName="min-h-[64px]" gap="md" />
-        ) : servers.length === 0 ? (
+        ) : visibleServers.length === 0 ? (
           <div className="rounded-xl border border-border/50 bg-muted/10 px-4 py-6 text-sm text-muted-foreground text-center">
             {t("mcpGrid.noMcpServers")}
           </div>
         ) : (
           <StaggeredList
-            items={servers}
+            items={visibleServers}
             show={!isLoading}
             keyExtractor={(server) => server.id}
             staggerDelay={50}
@@ -190,11 +201,13 @@ export function McpGrid({
                         </Button>
                       )}
                     </div>
-                    <Switch
-                      checked={isEnabled}
-                      onCheckedChange={() => onToggleInstall?.(server.id)}
-                      disabled={isRowLoading || server.force_enabled}
-                    />
+                    {displayMode === "admin" ? null : (
+                      <Switch
+                        checked={isEnabled}
+                        onCheckedChange={() => onToggleInstall?.(server.id)}
+                        disabled={isRowLoading || server.force_enabled}
+                      />
+                    )}
                   </div>
                 </div>
               );
