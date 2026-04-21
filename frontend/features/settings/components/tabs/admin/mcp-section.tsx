@@ -117,7 +117,7 @@ export function AdminMcpSection({
     setEditState({
       name: item.name,
       description: item.description ?? "",
-      serverConfig: JSON.stringify(item.masked_server_config || {}, null, 2),
+      serverConfig: "",
       defaultEnabled: item.default_enabled,
       forceEnabled: item.force_enabled,
     });
@@ -235,6 +235,12 @@ export function AdminMcpSection({
               className="min-h-32"
               placeholder={DEFAULT_MCP_CONFIG}
             />
+            <div className="text-xs text-muted-foreground">
+              {t(
+                "settings.admin.mcpSecretHint",
+                "Sensitive values are masked in the list. Leave this blank to keep the current config, or re-enter the full JSON to update it.",
+              )}
+            </div>
             <AdminMaskedUpdateHint />
           </div>
           <DialogFooter>

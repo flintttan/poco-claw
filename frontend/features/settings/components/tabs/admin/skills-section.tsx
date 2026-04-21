@@ -89,6 +89,7 @@ export function AdminSkillsSection({
             skills={filteredSkills}
             installs={[]}
             isLoading={isLoading}
+            displayMode="admin"
             onOpenSkillSettings={(skill) => setSelectedSkillId(skill.id)}
             onDeleteSkill={(skillId) => void onDelete(skillId)}
             createCardLabel={t("library.skillsPage.addCard")}
