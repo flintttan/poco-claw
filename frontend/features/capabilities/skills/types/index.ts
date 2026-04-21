@@ -155,3 +155,11 @@ export interface SkillsMpMarketplaceStatusResponse {
 export interface SkillsMpImportDiscoverInput {
   item: SkillsMpSkillItem;
 }
+
+export interface SkillImportApi {
+  discover: (formData: FormData) => Promise<SkillImportDiscoverResponse>;
+  commit: (
+    input: SkillImportCommitInput,
+  ) => Promise<SkillImportCommitEnqueueResponse>;
+  getJob: (jobId: string) => Promise<SkillImportJobStatusResponse>;
+}

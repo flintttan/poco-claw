@@ -118,3 +118,11 @@ export interface PluginImportJobStatusResponse {
   started_at: string | null;
   finished_at: string | null;
 }
+
+export interface PluginImportApi {
+  discover: (formData: FormData) => Promise<PluginImportDiscoverResponse>;
+  commit: (
+    input: PluginImportCommitInput,
+  ) => Promise<PluginImportCommitEnqueueResponse>;
+  getJob: (jobId: string) => Promise<PluginImportJobStatusResponse>;
+}

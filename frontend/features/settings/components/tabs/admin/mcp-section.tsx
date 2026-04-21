@@ -19,6 +19,7 @@ import { useT } from "@/lib/i18n/client";
 
 import {
   AdminCreateActions,
+  AdminEditActions,
   AdminItemActions,
   AdminLabeledInputField,
   AdminLabeledTextareaField,
@@ -227,37 +228,54 @@ export function AdminMcpSection({
             <AdminMaskedUpdateHint />
           </div>
           <DialogFooter>
-            <AdminCreateActions
-              isSaving={isSaving}
-              onCreate={async () => {
-                const serverConfigText = editState.serverConfig.trim();
-                const payload = {
-                  name: editState.name.trim(),
-                  description: editState.description || undefined,
-                  server_config: parseJsonObject(
-                    serverConfigText || "{}",
-                    t("settings.admin.invalidJsonObject"),
-                  ),
-                  default_enabled: editState.defaultEnabled,
-                  force_enabled: editState.forceEnabled,
-                };
-
-                if (!editingServer) {
-                  if (!payload.name) {
-                    throw new Error(t("settings.admin.mcpNameRequired"));
-                  }
-                  await onCreate(payload);
-                } else {
+            {editingServer ? (
+              <AdminEditActions
+                isSaving={isSaving}
+                onCancel={closeDialog}
+                onSave={async () => {
+                  const serverConfigText = editState.serverConfig.trim();
+                  const payload = {
+                    name: editState.name.trim(),
+                    description: editState.description || undefined,
+                    server_config: parseJsonObject(
+                      serverConfigText || "{}",
+                      t("settings.admin.invalidJsonObject"),
+                    ),
+                    default_enabled: editState.defaultEnabled,
+                    force_enabled: editState.forceEnabled,
+                  };
                   await onUpdate(editingServer.id, {
                     ...payload,
                     server_config: serverConfigText
                       ? payload.server_config
                       : undefined,
                   });
-                }
-                closeDialog();
-              }}
-            />
+                  closeDialog();
+                }}
+              />
+            ) : (
+              <AdminCreateActions
+                isSaving={isSaving}
+                onCreate={async () => {
+                  const serverConfigText = editState.serverConfig.trim();
+                  const payload = {
+                    name: editState.name.trim(),
+                    description: editState.description || undefined,
+                    server_config: parseJsonObject(
+                      serverConfigText || "{}",
+                      t("settings.admin.invalidJsonObject"),
+                    ),
+                    default_enabled: editState.defaultEnabled,
+                    force_enabled: editState.forceEnabled,
+                  };
+                  if (!payload.name) {
+                    throw new Error(t("settings.admin.mcpNameRequired"));
+                  }
+                  await onCreate(payload);
+                  closeDialog();
+                }}
+              />
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

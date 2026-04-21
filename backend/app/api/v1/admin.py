@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends
+import uuid
+
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, UploadFile
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
@@ -27,6 +29,12 @@ from app.schemas.plugin import (
     PluginCreateRequest,
     PluginUpdateRequest,
 )
+from app.schemas.plugin_import import (
+    PluginImportCommitEnqueueResponse,
+    PluginImportCommitRequest,
+    PluginImportDiscoverResponse,
+    PluginImportJobResponse,
+)
 from app.schemas.preset import (
     PresetAdminResponse,
     PresetCreateRequest,
@@ -35,6 +43,12 @@ from app.schemas.preset import (
     PresetVisualSummary,
 )
 from app.schemas.response import Response, ResponseSchema
+from app.schemas.skill_import import (
+    SkillImportCommitEnqueueResponse,
+    SkillImportCommitRequest,
+    SkillImportDiscoverResponse,
+    SkillImportJobResponse,
+)
 from app.schemas.skill import SkillCreateRequest, SkillResponse, SkillUpdateRequest
 from app.schemas.slash_command import (
     SlashCommandAdminResponse,
@@ -52,7 +66,13 @@ from app.services.mcp_server_service import McpServerService
 from app.services.model_admin_service import ModelAdminService
 from app.services.preset_service import PresetService
 from app.services.plugin_service import PluginService
+from app.services.plugin_import_job_service import (
+    PluginImportJobService as PluginImportJobSvc,
+)
+from app.services.plugin_import_service import PluginImportService as PluginImportSvc
 from app.services.skill_service import SkillService
+from app.services.skill_import_job_service import SkillImportJobService
+from app.services.skill_import_service import SkillImportService
 from app.services.slash_command_service import SlashCommandService
 from app.services.constants import SYSTEM_USER_ID
 from app.services.sub_agent_service import SubAgentService
@@ -63,8 +83,12 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 env_var_service = EnvVarService()
 model_admin_service = ModelAdminService()
 skill_service = SkillService()
+skill_import_service = SkillImportService()
+skill_import_job_service = SkillImportJobService(import_service=skill_import_service)
 mcp_server_service = McpServerService()
 plugin_service = PluginService()
+plugin_import_service = PluginImportSvc()
+plugin_import_job_service = PluginImportJobSvc(import_service=plugin_import_service)
 user_admin_service = UserAdminService()
 slash_command_service = SlashCommandService()
 claude_md_service = ClaudeMdService()
@@ -193,6 +217,57 @@ async def delete_system_skill(
     return Response.success(data={"id": skill_id}, message="System skill deleted")
 
 
+@router.post(
+    "/skills/import/discover",
+    response_model=ResponseSchema[SkillImportDiscoverResponse],
+)
+def discover_system_skill_import(
+    file: UploadFile | None = File(default=None),
+    github_url: str | None = Form(default=None),
+    _: User = Depends(require_system_admin),
+    db: Session = Depends(get_db),
+) -> JSONResponse:
+    result = skill_import_service.discover(
+        db,
+        user_id=SYSTEM_USER_ID,
+        file=file,
+        github_url=github_url,
+    )
+    return Response.success(data=result, message="System skill import discovered")
+
+
+@router.post(
+    "/skills/import/commit",
+    response_model=ResponseSchema[SkillImportCommitEnqueueResponse],
+)
+def commit_system_skill_import(
+    request: SkillImportCommitRequest,
+    background_tasks: BackgroundTasks,
+    _: User = Depends(require_system_admin),
+    db: Session = Depends(get_db),
+) -> JSONResponse:
+    result = skill_import_job_service.enqueue_commit(
+        db, user_id=SYSTEM_USER_ID, request=request
+    )
+    background_tasks.add_task(
+        skill_import_job_service.process_commit_job, result.job_id
+    )
+    return Response.success(data=result, message="System skill import queued")
+
+
+@router.get(
+    "/skills/import/jobs/{job_id}",
+    response_model=ResponseSchema[SkillImportJobResponse],
+)
+def get_system_skill_import_job(
+    job_id: "uuid.UUID",
+    _: User = Depends(require_system_admin),
+    db: Session = Depends(get_db),
+) -> JSONResponse:
+    result = skill_import_job_service.get_job(db, user_id=SYSTEM_USER_ID, job_id=job_id)
+    return Response.success(data=result, message="System skill import job retrieved")
+
+
 @router.get("/mcp-servers", response_model=ResponseSchema[list[McpServerAdminResponse]])
 async def list_system_mcp_servers(
     _: User = Depends(require_system_admin),
@@ -301,6 +376,59 @@ async def delete_system_plugin(
 ) -> JSONResponse:
     plugin_service.delete_plugin(db, user_id=SYSTEM_USER_ID, plugin_id=plugin_id)
     return Response.success(data={"id": plugin_id}, message="System plugin deleted")
+
+
+@router.post(
+    "/plugins/import/discover",
+    response_model=ResponseSchema[PluginImportDiscoverResponse],
+)
+def discover_system_plugin_import(
+    file: UploadFile | None = File(default=None),
+    github_url: str | None = Form(default=None),
+    _: User = Depends(require_system_admin),
+    db: Session = Depends(get_db),
+) -> JSONResponse:
+    result = plugin_import_service.discover(
+        db,
+        user_id=SYSTEM_USER_ID,
+        file=file,
+        github_url=github_url,
+    )
+    return Response.success(data=result, message="System plugin import discovered")
+
+
+@router.post(
+    "/plugins/import/commit",
+    response_model=ResponseSchema[PluginImportCommitEnqueueResponse],
+)
+def commit_system_plugin_import(
+    request: PluginImportCommitRequest,
+    background_tasks: BackgroundTasks,
+    _: User = Depends(require_system_admin),
+    db: Session = Depends(get_db),
+) -> JSONResponse:
+    result = plugin_import_job_service.enqueue_commit(
+        db, user_id=SYSTEM_USER_ID, request=request
+    )
+    background_tasks.add_task(
+        plugin_import_job_service.process_commit_job, result.job_id
+    )
+    return Response.success(data=result, message="System plugin import queued")
+
+
+@router.get(
+    "/plugins/import/jobs/{job_id}",
+    response_model=ResponseSchema[PluginImportJobResponse],
+)
+def get_system_plugin_import_job(
+    job_id: uuid.UUID,
+    _: User = Depends(require_system_admin),
+    db: Session = Depends(get_db),
+) -> JSONResponse:
+    result = plugin_import_job_service.get_job(
+        db, user_id=SYSTEM_USER_ID, job_id=job_id
+    )
+    return Response.success(data=result, message="System plugin import job retrieved")
 
 
 @router.get(

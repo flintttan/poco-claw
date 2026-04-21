@@ -6,6 +6,10 @@ import type {
 import type {
   Skill,
   SkillCreateInput,
+  SkillImportCommitInput,
+  SkillImportCommitEnqueueResponse,
+  SkillImportDiscoverResponse,
+  SkillImportJobStatusResponse,
   SkillUpdateInput,
 } from "@/features/capabilities/skills/types";
 import type {
@@ -14,6 +18,10 @@ import type {
 } from "@/features/capabilities/mcp/types";
 import type {
   PluginCreateInput,
+  PluginImportCommitInput,
+  PluginImportCommitEnqueueResponse,
+  PluginImportDiscoverResponse,
+  PluginImportJobStatusResponse,
   PluginUpdateInput,
 } from "@/features/capabilities/plugins/types";
 import type {
@@ -157,6 +165,31 @@ export const adminApi = {
   deleteSystemSkill: async (skillId: number) => {
     return apiClient.delete(API_ENDPOINTS.adminSkill(skillId));
   },
+  importSystemSkillDiscover: async (
+    formData: FormData,
+  ): Promise<SkillImportDiscoverResponse> => {
+    return apiClient.post<SkillImportDiscoverResponse>(
+      API_ENDPOINTS.adminSkillImportDiscover,
+      formData,
+      { timeoutMs: 5 * 60_000 },
+    );
+  },
+  importSystemSkillCommit: async (
+    input: SkillImportCommitInput,
+  ): Promise<SkillImportCommitEnqueueResponse> => {
+    return apiClient.post<SkillImportCommitEnqueueResponse>(
+      API_ENDPOINTS.adminSkillImportCommit,
+      input,
+    );
+  },
+  getSystemSkillImportJob: async (
+    jobId: string,
+  ): Promise<SkillImportJobStatusResponse> => {
+    return apiClient.get<SkillImportJobStatusResponse>(
+      API_ENDPOINTS.adminSkillImportJob(jobId),
+      { cache: "no-store" },
+    );
+  },
   listSystemMcpServers: async (): Promise<AdminMcpServer[]> => {
     return apiClient.get<AdminMcpServer[]>(API_ENDPOINTS.adminMcpServers, {
       cache: "no-store",
@@ -200,6 +233,31 @@ export const adminApi = {
   },
   deleteSystemPlugin: async (pluginId: number) => {
     return apiClient.delete(API_ENDPOINTS.adminPlugin(pluginId));
+  },
+  importSystemPluginDiscover: async (
+    formData: FormData,
+  ): Promise<PluginImportDiscoverResponse> => {
+    return apiClient.post<PluginImportDiscoverResponse>(
+      API_ENDPOINTS.adminPluginImportDiscover,
+      formData,
+      { timeoutMs: 5 * 60_000 },
+    );
+  },
+  importSystemPluginCommit: async (
+    input: PluginImportCommitInput,
+  ): Promise<PluginImportCommitEnqueueResponse> => {
+    return apiClient.post<PluginImportCommitEnqueueResponse>(
+      API_ENDPOINTS.adminPluginImportCommit,
+      input,
+    );
+  },
+  getSystemPluginImportJob: async (
+    jobId: string,
+  ): Promise<PluginImportJobStatusResponse> => {
+    return apiClient.get<PluginImportJobStatusResponse>(
+      API_ENDPOINTS.adminPluginImportJob(jobId),
+      { cache: "no-store" },
+    );
   },
   listSystemSlashCommands: async (): Promise<AdminSlashCommand[]> => {
     return apiClient.get<AdminSlashCommand[]>(
