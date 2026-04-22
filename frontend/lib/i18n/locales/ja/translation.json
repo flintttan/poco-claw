@@ -581,7 +581,7 @@
       "openAll": "すべての Run を表示",
       "allRuns": "すべての Run",
       "sheetDescription": "異なる Run のリプレイと成果物をすばやく切り替えます。",
-      "sheetHint": "左右にスワイプすると、より早い Run にすばやく移動できます。",
+      "sheetHint": "上下にスクロールして以前の Run を表示・切り替えできます。",
       "current": "現在",
       "viewingHistory": "履歴 Run {{number}} を表示中",
       "backToCurrent": "現在の Run に戻る"

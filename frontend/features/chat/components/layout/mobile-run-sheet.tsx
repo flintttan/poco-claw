@@ -90,7 +90,7 @@ export function MobileRunSheet({
         ) : null}
 
         <ScrollArea className="max-h-[70vh] px-2 pb-4">
-          <div className="flex snap-x snap-mandatory gap-2 overflow-x-auto px-2 pb-4 md:block md:space-y-1 md:overflow-visible">
+          <div className="space-y-2 px-2 pb-4">
             {orderedRuns.map((run) => {
               const isSelected = run.run_id === selectedRunId;
               const isCurrent = run.run_id === currentRunId;
@@ -120,7 +120,7 @@ export function MobileRunSheet({
                     onOpenChange(false);
                   }}
                   className={cn(
-                    "flex min-w-[17rem] snap-start flex-col items-start gap-3 rounded-2xl border px-3 py-3 text-left transition-colors md:w-full md:min-w-0 md:flex-row",
+                    "flex w-full flex-row items-start gap-3 rounded-2xl border px-3 py-3 text-left transition-colors",
                     isSelected
                       ? "border-primary/25 bg-primary/10"
                       : "border-border/60 bg-background hover:bg-muted/40",

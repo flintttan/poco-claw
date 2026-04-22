@@ -581,7 +581,7 @@
       "openAll": "View all runs",
       "allRuns": "All runs",
       "sheetDescription": "Quickly switch replay and artifacts across different runs.",
-      "sheetHint": "Swipe sideways to reach earlier runs faster.",
+      "sheetHint": "Scroll vertically to browse and switch to earlier runs.",
       "current": "Current",
       "viewingHistory": "Viewing history Run {{number}}",
       "backToCurrent": "Back to current"
