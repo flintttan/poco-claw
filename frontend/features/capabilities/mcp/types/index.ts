@@ -8,6 +8,7 @@ export interface McpServer {
   scope: string;
   owner_user_id: string | null;
   server_config: Record<string, unknown>;
+  has_sensitive_data?: boolean;
   default_enabled: boolean;
   force_enabled: boolean;
   created_at: string;

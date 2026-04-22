@@ -239,10 +239,15 @@ export function McpSettingsDialog({
               {t("mcpSettings.fullJsonConfig")}
             </Label>
             <p className="text-xs text-muted-foreground">
-              {t(
-                "mcpSettings.fullJsonConfigHint",
-                'Paste a Claude-style MCP config, e.g. {"mcpServers": {...}}',
-              )}
+              {readOnly && item?.server.scope === "system"
+                ? t(
+                    "mcpSettings.maskedJsonConfigHint",
+                    "System MCP configs are masked in read-only view.",
+                  )
+                : t(
+                    "mcpSettings.fullJsonConfigHint",
+                    'Paste a Claude-style MCP config, e.g. {"mcpServers": {...}}',
+                  )}
             </p>
             <Textarea
               value={jsonConfig}

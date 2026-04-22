@@ -2145,6 +2145,8 @@
     "descriptionPlaceholder": "e.g. Search GitHub issues and pull requests",
     "descriptionRecommended": "Description (recommended)",
     "fullJsonConfig": "Complete JSON configuration",
+    "fullJsonConfigHint": "Paste a Claude-style MCP config, e.g. {\"mcpServers\": {...}}",
+    "maskedJsonConfigHint": "System MCP configs are masked in read-only view.",
     "mcpName": "MCP Name",
     "jsonConfig": "Complete JSON configuration",
     "invalidJson": "Invalid JSON configuration",

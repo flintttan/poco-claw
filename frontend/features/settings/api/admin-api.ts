@@ -84,6 +84,7 @@ export interface AdminMcpServer {
   id: number;
   name: string;
   description: string | null;
+  server_config: Record<string, unknown>;
   masked_server_config: Record<string, unknown>;
   has_sensitive_data: boolean;
   scope: string;

@@ -2147,6 +2147,8 @@
     "jsonConfig": "完整的 JSON 配置",
     "configureServer": "配置 MCP 服务器",
     "fullJsonConfig": "完整的 JSON 配置",
+    "fullJsonConfigHint": "粘贴 Claude 风格的 MCP 配置，例如：{\"mcpServers\": {...}}",
+    "maskedJsonConfigHint": "系统 MCP 配置在只读查看时会进行脱敏展示。",
     "invalidJson": "JSON 配置格式错误",
     "nameRequired": "名称不能为空",
     "saveFailed": "保存 MCP 服务器失败"
