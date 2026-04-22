@@ -32,6 +32,7 @@ interface SkillsGridProps {
   installs: UserSkillInstall[];
   loadingId?: number | null;
   isLoading?: boolean;
+  displayMode?: "personal" | "runtime" | "admin";
   onInstall?: (skillId: number) => void;
   onDeleteSkill?: (skillId: number) => void;
   onOpenSkillSettings?: (skill: Skill) => void;
@@ -54,6 +55,7 @@ export function SkillsGrid({
   installs,
   loadingId,
   isLoading = false,
+  displayMode = "personal",
   onInstall,
   onDeleteSkill,
   onOpenSkillSettings,
@@ -195,6 +197,22 @@ export function SkillsGrid({
     [customSkillGroups, marketSkillGroups, systemSkillGroups],
   );
 
+  const visibleSkillGroups = React.useMemo(() => {
+    if (displayMode === "admin") {
+      return systemSkillGroups;
+    }
+    if (displayMode === "personal") {
+      return [...marketSkillGroups, ...customSkillGroups];
+    }
+    return allSkillGroups;
+  }, [
+    allSkillGroups,
+    customSkillGroups,
+    displayMode,
+    marketSkillGroups,
+    systemSkillGroups,
+  ]);
+
   function SkillRow({ skill }: { skill: Skill }) {
     const [isHovered, setIsHovered] = React.useState(false);
     const install = installBySkillId.get(skill.id);
@@ -245,6 +263,16 @@ export function SkillsGrid({
               >
                 {categoryLabel}
               </Badge>
+              {skill.default_enabled && !skill.force_enabled ? (
+                <Badge variant="secondary" className="text-xs">
+                  {t("common.default")}
+                </Badge>
+              ) : null}
+              {skill.force_enabled ? (
+                <Badge variant="destructive" className="text-xs">
+                  {t("common.forced")}
+                </Badge>
+              ) : null}
               {isAgentCreated && (
                 <Badge variant="secondary" className="text-xs">
                   {t("library.skillsManager.source.skillCreator")}
@@ -277,13 +305,15 @@ export function SkillsGrid({
                   <Trash2 className="size-4" />
                 </Button>
               )}
-              <Switch
-                checked={install.enabled}
-                disabled={isRowLoading}
-                onCheckedChange={(enabled) =>
-                  onToggleEnabled?.(install.id, enabled)
-                }
-              />
+              {displayMode === "admin" ? null : (
+                <Switch
+                  checked={install.enabled}
+                  disabled={isRowLoading || skill.force_enabled}
+                  onCheckedChange={(enabled) =>
+                    onToggleEnabled?.(install.id, enabled)
+                  }
+                />
+              )}
             </div>
           ) : (
             <div className="flex items-center gap-2">
@@ -292,7 +322,9 @@ export function SkillsGrid({
                 disabled={isRowLoading}
                 onClick={() => onInstall?.(skill.id)}
               >
-                {t("library.skillsManager.actions.install")}
+                {skill.default_enabled || skill.force_enabled
+                  ? t("common.enabled")
+                  : t("library.skillsManager.actions.install")}
               </Button>
               {skill.scope === "user" && (
                 <Button
@@ -453,7 +485,9 @@ export function SkillsGrid({
             {t("library.skillsManager.empty")}
           </div>
         ) : (
-          <div className="space-y-4">{renderSourceTree(allSkillGroups)}</div>
+          <div className="space-y-4">
+            {renderSourceTree(visibleSkillGroups)}
+          </div>
         )}
       </div>
     </div>
