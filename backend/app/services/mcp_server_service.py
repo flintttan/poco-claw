@@ -151,13 +151,20 @@ class McpServerService:
 
     @staticmethod
     def _to_response(server: McpServer) -> McpServerResponse:
+        response_server_config = server.server_config
+        has_sensitive_data = False
+        if server.scope == "system":
+            response_server_config, has_sensitive_data = mask_sensitive_structure(
+                server.server_config
+            )
         return McpServerResponse(
             id=server.id,
             name=server.name,
             description=server.description,
             scope=server.scope,
             owner_user_id=server.owner_user_id,
-            server_config=server.server_config,
+            server_config=response_server_config,
+            has_sensitive_data=has_sensitive_data,
             default_enabled=bool(server.default_enabled),
             force_enabled=bool(server.force_enabled),
             created_at=server.created_at,
@@ -173,6 +180,7 @@ class McpServerService:
             id=server.id,
             name=server.name,
             description=server.description,
+            server_config=server.server_config,
             scope=server.scope,
             owner_user_id=server.owner_user_id,
             default_enabled=bool(server.default_enabled),

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping, Sequence
 from typing import Any
 
@@ -8,18 +9,54 @@ SENSITIVE_KEYWORDS = (
     "token",
     "password",
     "passwd",
+    "auth",
+    "bearer",
+    "credential",
+    "credentials",
     "api_key",
     "apikey",
+    "api-token",
+    "x-api-key",
     "access_key",
+    "access_token",
+    "refresh_token",
+    "id_token",
     "private_key",
+    "secret_key",
+    "app_secret",
+    "app_key",
+    "client_key",
     "client_secret",
     "authorization",
+    "sign",
+    "signature",
+    "signing_key",
+    "webhook_secret",
+    "session_key",
+    "session_token",
+    "license_key",
+    "connection_string",
+    "database_url",
+    "dsn",
+    "pat",
 )
 
 
 def _looks_sensitive_key(key: str) -> bool:
-    lowered = key.lower()
+    normalized = _normalize_key(key)
+    lowered = normalized.lower()
     return any(keyword in lowered for keyword in SENSITIVE_KEYWORDS)
+
+
+def _normalize_key(key: str) -> str:
+    trimmed = key.strip()
+    if not trimmed:
+        return ""
+
+    snake_like = re.sub(r"(?<!^)(?=[A-Z])", "_", trimmed)
+    snake_like = re.sub(r"[^a-zA-Z0-9]+", "_", snake_like)
+    snake_like = re.sub(r"_+", "_", snake_like)
+    return snake_like.strip("_").lower()
 
 
 def _mask_string(value: str) -> str:

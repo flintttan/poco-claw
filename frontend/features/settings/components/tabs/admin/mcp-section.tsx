@@ -23,7 +23,6 @@ import {
   AdminItemActions,
   AdminLabeledInputField,
   AdminLabeledTextareaField,
-  AdminMaskedUpdateHint,
   AdminPolicyHint,
   AdminPolicySwitchField,
   AdminSectionError,
@@ -117,7 +116,7 @@ export function AdminMcpSection({
     setEditState({
       name: item.name,
       description: item.description ?? "",
-      serverConfig: "",
+      serverConfig: JSON.stringify(item.server_config ?? {}, null, 2),
       defaultEnabled: item.default_enabled,
       forceEnabled: item.force_enabled,
     });
@@ -238,10 +237,9 @@ export function AdminMcpSection({
             <div className="text-xs text-muted-foreground">
               {t(
                 "settings.admin.mcpSecretHint",
-                "Sensitive values are masked in the list. Leave this blank to keep the current config, or re-enter the full JSON to update it.",
+                "Sensitive values are masked in the list, but editing shows the full JSON config.",
               )}
             </div>
-            <AdminMaskedUpdateHint />
           </div>
           <DialogFooter>
             {editingServer ? (
@@ -262,9 +260,6 @@ export function AdminMcpSection({
                   };
                   await onUpdate(editingServer.id, {
                     ...payload,
-                    server_config: serverConfigText
-                      ? payload.server_config
-                      : undefined,
                   });
                   closeDialog();
                 }}

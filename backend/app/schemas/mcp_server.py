@@ -26,6 +26,7 @@ class McpServerResponse(BaseModel):
     name: str
     description: str | None
     server_config: dict
+    has_sensitive_data: bool = False
     scope: str
     owner_user_id: str | None
     default_enabled: bool
@@ -38,6 +39,7 @@ class McpServerAdminResponse(BaseModel):
     id: int
     name: str
     description: str | None
+    server_config: dict
     masked_server_config: dict
     has_sensitive_data: bool
     scope: str
