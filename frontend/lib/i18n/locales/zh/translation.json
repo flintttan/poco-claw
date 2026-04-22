@@ -2002,7 +2002,7 @@
       "chat": "对话型"
     },
     "preview": {
-      "executionSummary": "{{files}} 个文件变更 · {{steps}} 个回放步骤",
+      "executionSummary": "包含工作区活动的执行轮次",
       "conversationOnly": "纯对话轮次",
       "execution": "{{files}} 个文件变更 · {{steps}} 个回放步骤",
       "duration": "耗时 {{duration}}"

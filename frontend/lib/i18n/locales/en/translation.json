@@ -2002,7 +2002,7 @@
       "chat": "Conversation"
     },
     "preview": {
-      "executionSummary": "{{files}} file changes · {{steps}} replay steps",
+      "executionSummary": "Execution run with workspace activity",
       "conversationOnly": "Conversation-only turn",
       "execution": "{{files}} file changes · {{steps}} replay steps",
       "duration": "Duration {{duration}}"

@@ -105,10 +105,7 @@ export function MobileRunSheet({
                 ? run.last_error
                 : run.state_patch?.current_step ||
                   (isActionNode
-                    ? t("runTimeline.preview.executionSummary", {
-                        files: fileChangeCount,
-                        steps: replayStepCount,
-                      })
+                    ? t("runTimeline.preview.executionSummary")
                     : t("runTimeline.preview.conversationOnly"));
 
               return (
