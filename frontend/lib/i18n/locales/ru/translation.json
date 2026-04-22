@@ -646,7 +646,7 @@
       "chat": "Диалог"
     },
     "preview": {
-      "executionSummary": "{{files}} изменений файлов · {{steps}} шагов повтора",
+      "executionSummary": "Запуск выполнения с активностью в рабочей области",
       "conversationOnly": "Только диалоговый проход",
       "execution": "{{files}} изменений файлов · {{steps}} шагов повтора",
       "duration": "Длительность {{duration}}"

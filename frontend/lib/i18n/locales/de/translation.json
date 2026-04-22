@@ -646,7 +646,7 @@
       "chat": "Konversation"
     },
     "preview": {
-      "executionSummary": "{{files}} Dateiänderungen · {{steps}} Replay-Schritte",
+      "executionSummary": "Ausführungs-Run mit Workspace-Aktivität",
       "conversationOnly": "Nur-Konversationsdurchlauf",
       "execution": "{{files}} Dateiänderungen · {{steps}} Replay-Schritte",
       "duration": "Dauer {{duration}}"
