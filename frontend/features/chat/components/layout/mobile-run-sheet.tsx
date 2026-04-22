@@ -58,7 +58,7 @@ export function MobileRunSheet({
 
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
-      <DrawerContent>
+      <DrawerContent className="!h-[85vh] !max-h-[85vh]">
         <DrawerHeader className="pb-2 text-left">
           <DrawerTitle>{t("mobile.runs.allRuns")}</DrawerTitle>
           <DrawerDescription>
@@ -89,7 +89,7 @@ export function MobileRunSheet({
           </div>
         ) : null}
 
-        <ScrollArea className="max-h-[70vh] px-2 pb-4">
+        <ScrollArea className="flex-1 min-h-0 px-2 pb-4">
           <div className="space-y-2 px-2 pb-4">
             {orderedRuns.map((run) => {
               const isSelected = run.run_id === selectedRunId;
