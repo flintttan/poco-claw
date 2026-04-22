@@ -23,6 +23,7 @@ import {
 import { cn } from "@/lib/utils";
 import { MobileRunTimeline } from "./mobile-run-timeline";
 import { MobileRunSheet } from "./mobile-run-sheet";
+import { dedupeFileChanges } from "@/features/chat/lib/run-record-utils";
 
 interface MobileExecutionViewProps {
   session: ExecutionSession | null;
@@ -70,8 +71,13 @@ export function MobileExecutionView({
   const selectedRunIndex = selectedRunId
     ? runs.findIndex((run) => run.run_id === selectedRunId)
     : -1;
-  const selectedRunFileChanges =
-    selectedRun?.state_patch?.workspace_state?.file_changes ?? [];
+  const selectedRunFileChanges = React.useMemo(
+    () =>
+      dedupeFileChanges(
+        selectedRun?.state_patch?.workspace_state?.file_changes ?? [],
+      ),
+    [selectedRun],
+  );
   const panelStatus = (selectedRun?.status ?? session?.status) as
     | "queued"
     | "claimed"
@@ -145,11 +151,13 @@ export function MobileExecutionView({
 
           {showFilePanel ? (
             <>
-              <MobileRunTimeline
-                runs={runs}
-                selectedRunId={selectedRunId}
-                onSelectRun={onSelectRun}
-              />
+              <div className="min-w-0 flex-1 overflow-hidden">
+                <MobileRunTimeline
+                  runs={runs}
+                  selectedRunId={selectedRunId}
+                  onSelectRun={onSelectRun}
+                />
+              </div>
               {runs.length > 1 ? (
                 <Button
                   type="button"

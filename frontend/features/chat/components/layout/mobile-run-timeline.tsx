@@ -5,7 +5,7 @@ import { Blocks, Loader2, MessageSquareText } from "lucide-react";
 import type { RunResponse } from "@/features/chat/types";
 import { cn } from "@/lib/utils";
 import { useT } from "@/lib/i18n/client";
-import { getRunToolExecutionsAction } from "@/features/chat/actions/query-actions";
+import { useRunRecordSummary } from "@/features/chat/hooks/use-run-record-summary";
 import {
   buildActionHint,
   getStatusTone,
@@ -41,58 +41,11 @@ export function MobileRunTimeline({
   onSelectRun,
 }: MobileRunTimelineProps) {
   const { t } = useT("translation");
-  const [runToolPresence, setRunToolPresence] = React.useState<
-    Record<string, boolean>
-  >({});
-
   const visibleRuns = React.useMemo(
     () => buildCompactRuns(runs, selectedRunId),
     [runs, selectedRunId],
   );
-
-  React.useEffect(() => {
-    let cancelled = false;
-
-    const unresolvedRuns = visibleRuns.filter(
-      (run) => runToolPresence[run.run_id] === undefined,
-    );
-    if (unresolvedRuns.length === 0) return;
-
-    const loadToolPresence = async () => {
-      const entries = await Promise.all(
-        unresolvedRuns.map(async (run) => {
-          try {
-            const items = await getRunToolExecutionsAction({
-              runId: run.run_id,
-              limit: 1,
-              offset: 0,
-            });
-            return [run.run_id, items.length > 0] as const;
-          } catch (error) {
-            console.error(
-              "[MobileRunTimeline] Failed to load run tool presence:",
-              error,
-            );
-            return [run.run_id, false] as const;
-          }
-        }),
-      );
-
-      if (cancelled) return;
-      setRunToolPresence((prev) => {
-        const next = { ...prev };
-        for (const [runId, hasTools] of entries) {
-          next[runId] = hasTools;
-        }
-        return next;
-      });
-    };
-
-    void loadToolPresence();
-    return () => {
-      cancelled = true;
-    };
-  }, [runToolPresence, visibleRuns]);
+  const runRecordSummaries = useRunRecordSummary(visibleRuns);
 
   if (runs.length <= 1) return null;
 
@@ -101,9 +54,10 @@ export function MobileRunTimeline({
       <div className="flex min-w-max items-center gap-1.5">
         {visibleRuns.map((run, index) => {
           const isSelected = run.run_id === selectedRunId;
+          const recordSummary = runRecordSummaries[run.run_id];
           const isActionNode = buildActionHint(
             run,
-            runToolPresence[run.run_id] === true,
+            (recordSummary?.replayStepCount ?? 0) > 0,
           );
           const statusTone = getStatusTone(run.status);
           const runNumber =
