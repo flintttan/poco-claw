@@ -113,6 +113,7 @@ export function MobileExecutionView({
     [showArtifactsTab, showComputerTab, t],
   );
   const showFilePanel = extraPanels.length > 0;
+  const showRunNavigation = runs.length > 1;
 
   React.useEffect(() => {
     setActiveIndex(0);
@@ -149,7 +150,7 @@ export function MobileExecutionView({
             <PanelLeft className="size-4" />
           </button>
 
-          {showFilePanel ? (
+          {showRunNavigation ? (
             <>
               <div className="min-w-0 flex-1 overflow-hidden">
                 <MobileRunTimeline
@@ -158,26 +159,24 @@ export function MobileExecutionView({
                   onSelectRun={onSelectRun}
                 />
               </div>
-              {runs.length > 1 ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon-sm"
-                  className="h-8 w-8 shrink-0 rounded-full"
-                  aria-label={t("mobile.runs.openAll")}
-                  title={t("mobile.runs.openAll")}
-                  onClick={() => setRunSheetOpen(true)}
-                >
-                  <Ellipsis className="size-4" />
-                </Button>
-              ) : null}
+              <Button
+                type="button"
+                variant="outline"
+                size="icon-sm"
+                className="h-8 w-8 shrink-0 rounded-full"
+                aria-label={t("mobile.runs.openAll")}
+                title={t("mobile.runs.openAll")}
+                onClick={() => setRunSheetOpen(true)}
+              >
+                <Ellipsis className="size-4" />
+              </Button>
             </>
           ) : null}
         </div>
 
-        {showFilePanel ? (
+        {showRunNavigation || showFilePanel ? (
           <div className="mt-2 space-y-2">
-            {isViewingHistory && selectedRunIndex >= 0 ? (
+            {showRunNavigation && isViewingHistory && selectedRunIndex >= 0 ? (
               <div className="flex items-center gap-2 rounded-full border border-primary/15 bg-primary/10 px-2 py-1 text-xs text-muted-foreground">
                 <span className="min-w-0 flex-1 truncate">
                   {t("mobile.runs.viewingHistory", {
@@ -196,52 +195,54 @@ export function MobileExecutionView({
               </div>
             ) : null}
 
-            <div className="relative min-w-0 rounded-full border border-border/60 bg-muted/60 p-1 font-serif">
-              <div
-                className={cn(
-                  "pointer-events-none absolute inset-y-1 left-1 rounded-full border border-primary/30 bg-primary shadow-sm transition-[transform,opacity] duration-300 ease-out",
-                  hasFooterSelection ? "opacity-100" : "opacity-0",
-                )}
-                style={{
-                  width: `calc((100% - 0.5rem) / ${footerTabs.length})`,
-                  transform: `translateX(${activeIndex * 100}%)`,
-                }}
-              />
+            {showFilePanel ? (
+              <div className="relative min-w-0 rounded-full border border-border/60 bg-muted/60 p-1 font-serif">
+                <div
+                  className={cn(
+                    "pointer-events-none absolute inset-y-1 left-1 rounded-full border border-primary/30 bg-primary shadow-sm transition-[transform,opacity] duration-300 ease-out",
+                    hasFooterSelection ? "opacity-100" : "opacity-0",
+                  )}
+                  style={{
+                    width: `calc((100% - 0.5rem) / ${footerTabs.length})`,
+                    transform: `translateX(${activeIndex * 100}%)`,
+                  }}
+                />
 
-              <div
-                className="relative grid"
-                style={{
-                  gridTemplateColumns: `repeat(${footerTabs.length}, minmax(0, 1fr))`,
-                }}
-              >
-                {footerTabs.map((tab) => {
-                  const Icon = tab.icon;
-                  const isActive = activeIndex === tab.index;
+                <div
+                  className="relative grid"
+                  style={{
+                    gridTemplateColumns: `repeat(${footerTabs.length}, minmax(0, 1fr))`,
+                  }}
+                >
+                  {footerTabs.map((tab) => {
+                    const Icon = tab.icon;
+                    const isActive = activeIndex === tab.index;
 
-                  return (
-                    <button
-                      key={tab.index}
-                      type="button"
-                      onClick={() => {
-                        setHasFooterSelection(true);
-                        swiperRef.current?.slideTo(tab.index);
-                      }}
-                      className={cn(
-                        "z-10 flex h-8 flex-row items-center justify-center gap-1.5 rounded-full px-2 transition-colors",
-                        isActive
-                          ? "font-semibold text-primary-foreground"
-                          : "text-muted-foreground",
-                      )}
-                    >
-                      <Icon className="size-4" />
-                      <span className="text-xs font-medium leading-none">
-                        {tab.label}
-                      </span>
-                    </button>
-                  );
-                })}
+                    return (
+                      <button
+                        key={tab.index}
+                        type="button"
+                        onClick={() => {
+                          setHasFooterSelection(true);
+                          swiperRef.current?.slideTo(tab.index);
+                        }}
+                        className={cn(
+                          "z-10 flex h-8 flex-row items-center justify-center gap-1.5 rounded-full px-2 transition-colors",
+                          isActive
+                            ? "font-semibold text-primary-foreground"
+                            : "text-muted-foreground",
+                        )}
+                      >
+                        <Icon className="size-4" />
+                        <span className="text-xs font-medium leading-none">
+                          {tab.label}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
+            ) : null}
           </div>
         ) : null}
       </div>

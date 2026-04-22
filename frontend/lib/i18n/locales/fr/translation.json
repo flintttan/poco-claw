@@ -581,7 +581,7 @@
       "openAll": "Voir tous les runs",
       "allRuns": "Tous les runs",
       "sheetDescription": "Basculez rapidement entre les relectures et les artefacts de différents runs.",
-      "sheetHint": "Faites glisser horizontalement pour atteindre plus vite les runs précédents.",
+      "sheetHint": "Faites défiler verticalement pour parcourir et choisir les runs précédents.",
       "current": "Actuel",
       "viewingHistory": "Historique : Run {{number}}",
       "backToCurrent": "Retour au run actuel"

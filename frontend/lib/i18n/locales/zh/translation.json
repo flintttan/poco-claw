@@ -582,7 +582,7 @@
       "openAll": "查看全部 Run",
       "allRuns": "全部 Run",
       "sheetDescription": "快速切换查看不同运行轮次的回放与产物。",
-      "sheetHint": "左右滑动可快速浏览更早的运行记录。",
+      "sheetHint": "上下滑动可浏览并切换更早的运行记录。",
       "current": "当前",
       "viewingHistory": "正在查看历史 Run {{number}}",
       "backToCurrent": "回到当前"

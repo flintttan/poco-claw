@@ -581,7 +581,7 @@
       "openAll": "Alle Runs anzeigen",
       "allRuns": "Alle Runs",
       "sheetDescription": "Wechsle schnell zwischen Replays und Artefakten verschiedener Runs.",
-      "sheetHint": "Wische seitlich, um frühere Runs schneller zu erreichen.",
+      "sheetHint": "Scrolle vertikal, um frühere Runs zu durchsuchen und auszuwählen.",
       "current": "Aktuell",
       "viewingHistory": "Verlauf: Run {{number}}",
       "backToCurrent": "Zurück zum aktuellen"
