@@ -286,7 +286,25 @@ export function SkillsGrid({
             ) : null}
           </div>
 
-          {isBuiltin ? null : isInstalled && install ? (
+          {displayMode === "admin" && isBuiltin && onDeleteSkill ? (
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                disabled={isRowLoading}
+                onClick={() => onDeleteSkill?.(skill.id)}
+                className={cn(
+                  actionIconClass,
+                  showDeleteAction
+                    ? "opacity-100 pointer-events-auto"
+                    : "opacity-0 pointer-events-none",
+                )}
+                title={t("common.delete")}
+              >
+                <Trash2 className="size-4" />
+              </Button>
+            </div>
+          ) : isBuiltin ? null : isInstalled && install ? (
             <div className="flex items-center gap-2">
               {skill.scope === "user" && (
                 <Button
