@@ -53,7 +53,7 @@ def _normalize_key(key: str) -> str:
     if not trimmed:
         return ""
 
-    snake_like = re.sub(r"(?<!^)(?=[A-Z])", "_", trimmed)
+    snake_like = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", trimmed)
     snake_like = re.sub(r"[^a-zA-Z0-9]+", "_", snake_like)
     snake_like = re.sub(r"_+", "_", snake_like)
     return snake_like.strip("_").lower()
