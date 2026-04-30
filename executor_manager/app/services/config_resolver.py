@@ -150,6 +150,18 @@ class ConfigResolver:
         )
 
         step_started = time.perf_counter()
+        runtime_env_map = await self._get_runtime_env_map(user_id)
+        logger.info(
+            "timing",
+            extra={
+                "step": "config_resolve_runtime_env_map",
+                "duration_ms": int((time.perf_counter() - step_started) * 1000),
+                "runtime_env_keys": len(runtime_env_map),
+                **ctx,
+            },
+        )
+
+        step_started = time.perf_counter()
         mcp_config = await self._resolve_effective_mcp_config(user_id, effective_config)
         logger.info(
             "timing",
@@ -261,6 +273,11 @@ class ConfigResolver:
         resolved_git = self._resolve_git_token(resolved, env_map)
         if resolved_git:
             resolved.update(resolved_git)
+        runtime_env_overrides = {
+            key: value
+            for key, value in (runtime_env_map or {}).items()
+            if isinstance(key, str) and key.strip() and isinstance(value, str)
+        }
         env_overrides = self._resolve_model_env_overrides(
             resolved,
             env_map,
@@ -268,8 +285,12 @@ class ConfigResolver:
             session_id=session_id,
             run_id=run_id,
         )
-        if env_overrides:
-            resolved["env_overrides"] = env_overrides
+        merged_env_overrides = {
+            **runtime_env_overrides,
+            **env_overrides,
+        }
+        if merged_env_overrides:
+            resolved["env_overrides"] = merged_env_overrides
 
         logger.info(
             "timing",
@@ -324,23 +345,30 @@ class ConfigResolver:
         session_id: str | None = None,
         run_id: str | None = None,
     ) -> dict[str, str]:
-        selected_model = str(
-            config_snapshot.get("model") or self.settings.default_model or ""
+        effective_default_model = str(
+            env_map.get("DEFAULT_MODEL") or self.settings.default_model or ""
         ).strip()
+        selected_model = str(
+            config_snapshot.get("model") or effective_default_model
+        ).strip()
+        env_overrides: dict[str, str] = {}
+        if effective_default_model:
+            env_overrides["DEFAULT_MODEL"] = effective_default_model
+
         explicit_provider_id = str(
             config_snapshot.get("model_provider_id") or ""
         ).strip()
         inferred_provider_id = self._infer_provider_id(selected_model)
         provider_id = explicit_provider_id or inferred_provider_id
         if not provider_id:
-            return {}
+            return env_overrides
 
         spec = _PROVIDER_RUNTIME_SPECS.get(provider_id)
         if not spec and explicit_provider_id and inferred_provider_id:
             provider_id = inferred_provider_id
             spec = _PROVIDER_RUNTIME_SPECS.get(provider_id)
         if not spec:
-            return {}
+            return env_overrides
 
         api_key = self._get_first_env_value(
             env_map, spec["source_api_key_env_keys"]
@@ -356,10 +384,9 @@ class ConfigResolver:
             or self._get_first_settings_value(spec["source_base_url_settings_fields"])
             or spec["default_base_url"]
         )
-        return {
-            spec["runtime_api_key_env_key"]: api_key,
-            spec["runtime_base_url_env_key"]: base_url,
-        }
+        env_overrides[spec["runtime_api_key_env_key"]] = api_key
+        env_overrides[spec["runtime_base_url_env_key"]] = base_url
+        return env_overrides
 
     @staticmethod
     def _infer_provider_id(model_id: str) -> str | None:
@@ -396,6 +423,9 @@ class ConfigResolver:
 
     async def _get_env_map(self, user_id: str) -> dict[str, str]:
         return await self.backend_client.get_env_map(user_id=user_id)
+
+    async def _get_runtime_env_map(self, user_id: str) -> dict[str, str]:
+        return await self.backend_client.get_runtime_env_map(user_id=user_id)
 
     async def _resolve_effective_mcp_config(
         self, user_id: str, config_snapshot: dict
