@@ -1,12 +1,23 @@
 "use client";
 
 import * as React from "react";
-import { ChevronDown, ChevronUp, Copy, Check, Pencil } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronRight,
+  ChevronUp,
+  Copy,
+  Check,
+  Pencil,
+} from "lucide-react";
 import { FileCard } from "@/components/shared/file-card";
 import { RepoCard } from "@/components/shared/repo-card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import type { MessageBlock, InputFile } from "@/features/chat/types";
+import type {
+  AgentTriggerContext,
+  MessageBlock,
+  InputFile,
+} from "@/features/chat/types";
 import { useT } from "@/lib/i18n/client";
 import { cn } from "@/lib/utils";
 
@@ -15,6 +26,7 @@ const MAX_LINES = 5;
 export function UserMessage({
   messageId,
   content,
+  triggerContext,
   attachments,
   repoUrl,
   gitBranch,
@@ -22,6 +34,7 @@ export function UserMessage({
 }: {
   messageId: string;
   content: string | MessageBlock[];
+  triggerContext?: AgentTriggerContext;
   attachments?: InputFile[];
   repoUrl?: string | null;
   gitBranch?: string | null;
@@ -31,6 +44,7 @@ export function UserMessage({
   const [isExpanded, setIsExpanded] = React.useState(false);
   const [shouldCollapse, setShouldCollapse] = React.useState(false);
   const [isCopied, setIsCopied] = React.useState(false);
+  const [isTriggerContextOpen, setIsTriggerContextOpen] = React.useState(false);
   const [isEditing, setIsEditing] = React.useState(false);
   const [isSubmittingEdit, setIsSubmittingEdit] = React.useState(false);
   const [draftContent, setDraftContent] = React.useState("");
@@ -58,6 +72,11 @@ export function UserMessage({
   const trimmedGitBranch = (gitBranch || "").trim();
   const hasRepo = trimmedRepoUrl.length > 0;
   const hasAttachments = Boolean(attachments && attachments.length > 0);
+  const triggerContextRows = React.useMemo(
+    () => buildTriggerContextRows(triggerContext, t),
+    [triggerContext, t],
+  );
+  const triggerSource = formatTriggerSource(triggerContext);
 
   // Copy handler
   const onCopy = async () => {
@@ -198,6 +217,49 @@ export function UserMessage({
             </div>
           ) : (
             <>
+              {triggerContext ? (
+                <div className="w-full min-w-0 max-w-full overflow-hidden rounded-lg border border-border bg-background/80 text-sm shadow-sm">
+                  <button
+                    type="button"
+                    className="flex w-full min-w-0 items-center gap-2 px-3 py-2 text-left text-muted-foreground transition-colors hover:text-foreground"
+                    onClick={() =>
+                      setIsTriggerContextOpen((current) => !current)
+                    }
+                    aria-expanded={isTriggerContextOpen}
+                  >
+                    {isTriggerContextOpen ? (
+                      <ChevronDown className="size-4 shrink-0" />
+                    ) : (
+                      <ChevronRight className="size-4 shrink-0" />
+                    )}
+                    <span className="min-w-0 flex-1 truncate font-medium text-foreground">
+                      {t("chat.triggerContextTitle")}
+                    </span>
+                    <span className="hidden min-w-0 truncate sm:inline">
+                      {[
+                        triggerContext.trigger_type,
+                        triggerSource,
+                        triggerContext.channel_id,
+                        triggerContext.trigger_message_id,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </span>
+                  </button>
+                  {isTriggerContextOpen ? (
+                    <dl className="grid gap-2 border-t border-border px-3 py-2 text-xs sm:grid-cols-[max-content_minmax(0,1fr)]">
+                      {triggerContextRows.map((row) => (
+                        <React.Fragment key={row.label}>
+                          <dt className="text-muted-foreground">{row.label}</dt>
+                          <dd className="min-w-0 break-words font-mono text-foreground">
+                            {row.value}
+                          </dd>
+                        </React.Fragment>
+                      ))}
+                    </dl>
+                  ) : null}
+                </div>
+              ) : null}
               <div className="w-fit min-w-0 max-w-full overflow-hidden rounded-lg bg-muted px-4 py-2 text-foreground">
                 <p
                   ref={observerRef}
@@ -258,4 +320,75 @@ export function UserMessage({
       )}
     </div>
   );
+}
+
+function formatTriggerSource(triggerContext?: AgentTriggerContext): string {
+  const actor = triggerContext?.source_actor;
+  if (!actor) return "";
+  const displayName = actor.display_name?.trim();
+  const identity = actor.user_id?.trim() || actor.agent_identity_id?.trim();
+  if (displayName && identity) return `${displayName} (${identity})`;
+  return displayName || identity || actor.actor_type || "";
+}
+
+function joinIds(values?: string[]): string {
+  const normalized = values?.map((value) => value.trim()).filter(Boolean) ?? [];
+  return normalized.length > 0 ? normalized.join(", ") : "-";
+}
+
+function buildTriggerContextRows(
+  triggerContext: AgentTriggerContext | undefined,
+  t: (key: string) => string,
+): Array<{ label: string; value: string }> {
+  if (!triggerContext) return [];
+  return [
+    {
+      label: t("chat.triggerContextFields.source"),
+      value: formatTriggerSource(triggerContext) || "-",
+    },
+    {
+      label: t("chat.triggerContextFields.triggerType"),
+      value: triggerContext.trigger_type || "-",
+    },
+    {
+      label: t("chat.triggerContextFields.server"),
+      value: triggerContext.server_id || "-",
+    },
+    {
+      label: t("chat.triggerContextFields.channel"),
+      value: triggerContext.channel_id || "-",
+    },
+    {
+      label: t("chat.triggerContextFields.message"),
+      value: triggerContext.trigger_message_id || "-",
+    },
+    {
+      label: t("chat.triggerContextFields.thread"),
+      value: triggerContext.thread_root_message_id || "-",
+    },
+    {
+      label: t("chat.triggerContextFields.agent"),
+      value: triggerContext.target_agent_identity_id || "-",
+    },
+    {
+      label: t("chat.triggerContextFields.handle"),
+      value: triggerContext.target_agent_handle || "-",
+    },
+    {
+      label: t("chat.triggerContextFields.messages"),
+      value: joinIds(triggerContext.references?.message_ids),
+    },
+    {
+      label: t("chat.triggerContextFields.artifacts"),
+      value: joinIds(triggerContext.references?.artifact_ids),
+    },
+    {
+      label: t("chat.triggerContextFields.tasks"),
+      value: joinIds(triggerContext.references?.task_ids),
+    },
+    {
+      label: t("chat.triggerContextFields.handoff"),
+      value: triggerContext.handoff?.dedupe_key || "-",
+    },
+  ];
 }

@@ -1,5 +1,4 @@
 from sqlalchemy.orm import Session
-
 from app.models.runtime_env_policy import RuntimeEnvPolicy
 from app.repositories.runtime_env_policy_repository import RuntimeEnvPolicyRepository
 from app.schemas.runtime_env_policy import (
@@ -48,8 +47,9 @@ class RuntimeEnvPolicyService:
                 updated_at=None,
             )
 
+        mode = policy.mode if policy.mode in {"disabled", "opt_in"} else "opt_in"
         return RuntimeEnvPolicyResponse(
-            mode=policy.mode,
+            mode=mode,
             allowlist_patterns=self._normalize_patterns(policy.allowlist_patterns),
             denylist_patterns=self._normalize_patterns(policy.denylist_patterns),
             protected_keys=list(PROTECTED_RUNTIME_ENV_KEYS),

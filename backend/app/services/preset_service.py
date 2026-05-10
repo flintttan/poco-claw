@@ -18,12 +18,14 @@ from app.repositories.skill_repository import SkillRepository
 from app.schemas.preset import (
     PresetAdminResponse,
     PresetCreateRequest,
+    PresetCopyRequest,
     PresetResponse,
     PresetSubAgentConfig,
     PresetVisualSummary,
     PresetUpdateRequest,
 )
 from app.services.constants import SYSTEM_USER_ID
+from app.services.workspace_member_service import require_workspace_member
 from app.services.storage_service import S3StorageService
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -76,7 +78,25 @@ class PresetService:
         self, db: Session, user_id: str, request: PresetCreateRequest
     ) -> PresetResponse:
         name = request.name.strip()
-        if PresetRepository.exists_by_user_name(db, user_id, name):
+        workspace_id = request.workspace_id if request.scope == "workspace" else None
+        if request.scope == "workspace":
+            if workspace_id is None:
+                raise AppException(
+                    error_code=ErrorCode.BAD_REQUEST,
+                    message="workspace_id is required for workspace presets",
+                )
+            require_workspace_member(db, workspace_id, user_id)
+
+        access_policy = (
+            "workspace_read" if request.scope == "workspace" else request.access_policy
+        )
+        if PresetRepository.exists_by_scope_name(
+            db,
+            scope=request.scope,
+            name=name,
+            user_id=user_id,
+            workspace_id=workspace_id,
+        ):
             raise AppException(
                 error_code=ErrorCode.PRESET_ALREADY_EXISTS,
                 message=f"Preset already exists: {name}",
@@ -93,12 +113,19 @@ class PresetService:
 
         preset = Preset(
             user_id=user_id,
+            scope=request.scope,
+            workspace_id=workspace_id,
+            owner_user_id=user_id,
+            created_by=user_id,
+            updated_by=user_id,
+            access_policy=access_policy,
             name=name,
             description=self._normalize_optional_str(request.description),
             visual_key=visual.key,
             prompt_template=request.prompt_template,
             browser_enabled=request.browser_enabled,
             memory_enabled=request.memory_enabled,
+            container_mode=request.container_mode,
             skill_ids=request.skill_ids,
             mcp_server_ids=request.mcp_server_ids,
             plugin_ids=request.plugin_ids,
@@ -110,6 +137,73 @@ class PresetService:
         db.commit()
         db.refresh(preset)
         return self._to_response(db, preset)
+
+    def copy_preset(
+        self,
+        db: Session,
+        user_id: str,
+        preset_id: int,
+        request: PresetCopyRequest,
+    ) -> PresetResponse:
+        source = PresetRepository.get_visible_by_id(db, preset_id, user_id)
+        if source is None:
+            raise AppException(
+                error_code=ErrorCode.PRESET_NOT_FOUND,
+                message=f"Preset not found: {preset_id}",
+            )
+
+        workspace_id = (
+            request.workspace_id if request.target_scope == "workspace" else None
+        )
+        if request.target_scope == "workspace":
+            if workspace_id is None:
+                raise AppException(
+                    error_code=ErrorCode.BAD_REQUEST,
+                    message="workspace_id is required for workspace presets",
+                )
+            require_workspace_member(db, workspace_id, user_id)
+
+        name = (request.name or source.name).strip()
+        access_policy = request.access_policy or (
+            "workspace_read" if request.target_scope == "workspace" else "private"
+        )
+        if PresetRepository.exists_by_scope_name(
+            db,
+            scope=request.target_scope,
+            name=name,
+            user_id=user_id,
+            workspace_id=workspace_id,
+        ):
+            raise AppException(
+                error_code=ErrorCode.PRESET_ALREADY_EXISTS,
+                message=f"Preset already exists: {name}",
+            )
+
+        copied = Preset(
+            user_id=user_id,
+            scope=request.target_scope,
+            workspace_id=workspace_id,
+            owner_user_id=user_id,
+            created_by=user_id,
+            updated_by=user_id,
+            access_policy=access_policy,
+            forked_from_preset_id=source.id,
+            name=name,
+            description=source.description,
+            visual_key=source.visual_key,
+            prompt_template=source.prompt_template,
+            browser_enabled=source.browser_enabled,
+            memory_enabled=source.memory_enabled,
+            container_mode=source.container_mode,
+            skill_ids=list(source.skill_ids),
+            mcp_server_ids=list(source.mcp_server_ids),
+            plugin_ids=list(source.plugin_ids),
+            subagent_configs=list(source.subagent_configs),
+        )
+        copied = PresetRepository.create(db, copied)
+        db.commit()
+        db.refresh(copied)
+        return self._to_response(db, copied)
 
     def update_preset(
         self,
@@ -138,14 +232,20 @@ class PresetService:
                     error_code=ErrorCode.BAD_REQUEST,
                     message="Preset name cannot be empty",
                 )
-            if PresetRepository.exists_by_user_name(
-                db, user_id, name, exclude_id=preset_id
+            if PresetRepository.exists_by_scope_name(
+                db,
+                scope=preset.scope,
+                name=name,
+                user_id=user_id,
+                workspace_id=preset.workspace_id,
+                exclude_id=preset_id,
             ):
                 raise AppException(
                     error_code=ErrorCode.PRESET_ALREADY_EXISTS,
                     message=f"Preset already exists: {name}",
                 )
             update_data["name"] = name
+        update_data["updated_by"] = user_id
 
         if "description" in update_data:
             update_data["description"] = self._normalize_optional_str(

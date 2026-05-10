@@ -5,6 +5,25 @@ description: Recreate native slash commands, Plan Mode, and AskQuestion interact
 
 Poco aims to reproduce the native interaction model people expect from Claude Code.
 
+## Interaction flow
+
+The core pattern is to clarify intent before using tools. Slash commands trigger structured actions, Plan Mode drafts work before execution, and AskQuestion collects missing decisions.
+
+```mermaid
+flowchart TD
+    A["User input"] --> B{"Interaction type"}
+    B -->|"Slash command"| C["Run predefined command"]
+    B -->|"Plan Mode"| D["Draft plan without file edits"]
+    B -->|"AskQuestion"| E["Request missing decision"]
+    B -->|"Normal task"| F["Execute with tools"]
+    C --> G["Execution events"]
+    D --> H["User review"]
+    H --> F
+    E --> I["User answer"]
+    I --> F
+    F --> G
+```
+
 ## Included patterns
 
 - Slash Commands

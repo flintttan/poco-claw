@@ -1,10 +1,15 @@
 from app.core.database import Base, TimestampMixin
 
+from app.models.agent_assignment import AgentAssignment
+from app.models.agent_identity import AgentIdentity
 from app.models.agent_message import AgentMessage
+from app.models.agent_persistent_state import AgentPersistentState
 from app.models.agent_run import AgentRun
 from app.models.agent_scheduled_task import AgentScheduledTask
 from app.models.agent_session import AgentSession
+from app.models.activity_log import ActivityLog
 from app.models.auth_identity import AuthIdentity
+from app.models.channel_artifact import ChannelArtifact
 from app.models.claude_md import UserClaudeMdSetting
 from app.models.env_var import UserEnvVar
 from app.models.im import (
@@ -26,6 +31,15 @@ from app.models.project import Project
 from app.models.project_file import ProjectFile
 from app.models.project_local_mount import ProjectLocalMount
 from app.models.runtime_env_policy import RuntimeEnvPolicy
+from app.models.server import Server
+from app.models.server_channel import ServerChannel
+from app.models.server_channel_message import ServerChannelMessage
+from app.models.server_channel_message_reaction import ServerChannelMessageReaction
+from app.models.server_channel_agent_member import ServerChannelAgentMember
+from app.models.server_channel_member import ServerChannelMember
+from app.models.server_channel_task import ServerChannelTask
+from app.models.server_invite import ServerInvite
+from app.models.server_member import ServerMember
 from app.models.session_queue_item import AgentSessionQueueItem
 from app.models.skill import Skill
 from app.models.skill_import_job import SkillImportJob
@@ -39,17 +53,29 @@ from app.models.user_session import UserSession
 from app.models.user_mcp_install import UserMcpInstall
 from app.models.user_plugin_install import UserPluginInstall
 from app.models.user_skill_install import UserSkillInstall
+from app.models.workspace import Workspace
+from app.models.workspace_board import WorkspaceBoard
+from app.models.workspace_board_field import WorkspaceBoardField
+from app.models.workspace_invite import WorkspaceInvite
+from app.models.workspace_issue import WorkspaceIssue
+from app.models.workspace_issue_field_value import WorkspaceIssueFieldValue
+from app.models.workspace_member import WorkspaceMember
 
 __all__ = [
     "Base",
     "TimestampMixin",
     "ActiveSession",
+    "ActivityLog",
+    "AgentAssignment",
+    "AgentIdentity",
     "AgentMessage",
+    "AgentPersistentState",
     "AgentRun",
     "AgentScheduledTask",
     "AgentSession",
     "AgentSessionQueueItem",
     "AuthIdentity",
+    "ChannelArtifact",
     "Channel",
     "ChannelDelivery",
     "DedupEvent",
@@ -67,6 +93,15 @@ __all__ = [
     "ProjectFile",
     "ProjectLocalMount",
     "RuntimeEnvPolicy",
+    "Server",
+    "ServerChannel",
+    "ServerChannelAgentMember",
+    "ServerChannelMessage",
+    "ServerChannelMessageReaction",
+    "ServerChannelMember",
+    "ServerChannelTask",
+    "ServerInvite",
+    "ServerMember",
     "Skill",
     "SkillImportJob",
     "SlashCommand",
@@ -80,4 +115,11 @@ __all__ = [
     "UserPluginInstall",
     "UserSkillInstall",
     "WatchedSession",
+    "Workspace",
+    "WorkspaceBoard",
+    "WorkspaceBoardField",
+    "WorkspaceInvite",
+    "WorkspaceIssue",
+    "WorkspaceIssueFieldValue",
+    "WorkspaceMember",
 ]

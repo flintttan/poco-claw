@@ -29,3 +29,4 @@ class AuthConfigResponse(BaseModel):
     setup_required: bool
     configured_providers: list[AuthProviderName]
     providers: list[AuthProviderStatus]
+    workspace_features_enabled: bool

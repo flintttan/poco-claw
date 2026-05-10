@@ -9,6 +9,7 @@ import {
   PenSquare,
   Search,
   Sparkles,
+  Server,
   Bookmark,
   Clock,
   Brain,
@@ -64,6 +65,13 @@ const TOP_NAV_ITEMS = [
     href: "/capabilities/scheduled-tasks",
   },
   {
+    id: "servers",
+    labelKey: "sidebar.servers",
+    defaultLabel: "Servers",
+    icon: Server,
+    href: "/servers",
+  },
+  {
     id: "memories",
     labelKey: "sidebar.memories",
     defaultLabel: "Memories",
@@ -88,6 +96,8 @@ const ICON_ANIMATIONS: Record<string, string> = {
     "transition-transform duration-300 group-hover/menu-item:-translate-y-0.5 group-hover/menu-item:scale-110",
   "scheduled-tasks":
     "transition-transform duration-500 group-hover/menu-item:rotate-[360deg]",
+  servers:
+    "transition-transform duration-300 group-hover/menu-item:scale-110 group-hover/menu-item:-translate-y-0.5",
   memories:
     "transition-transform duration-300 group-hover/menu-item:scale-110 group-hover/menu-item:rotate-6",
   admin:

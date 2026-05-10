@@ -21,9 +21,19 @@ import { getRunFileChangeCount } from "@/features/chat/components/layout/run-tim
 
 interface ExecutionContainerProps {
   sessionId: string;
+  defaultRightPanelCollapsed?: boolean;
+  collapsedChatContentInsetPercent?: number;
+  hidePresetBadge?: boolean;
+  onCancelExecution?: (() => Promise<void>) | undefined;
 }
 
-export function ExecutionContainer({ sessionId }: ExecutionContainerProps) {
+export function ExecutionContainer({
+  sessionId,
+  defaultRightPanelCollapsed = false,
+  collapsedChatContentInsetPercent,
+  hidePresetBadge = false,
+  onCancelExecution,
+}: ExecutionContainerProps) {
   const { t } = useT("translation");
   const { refreshTasks } = useTaskHistoryContext();
   const [runs, setRuns] = React.useState<RunResponse[]>([]);
@@ -124,8 +134,9 @@ export function ExecutionContainer({ sessionId }: ExecutionContainerProps) {
     return "computer";
   }, [showArtifactsTab, showComputerTab]);
   const [rightTab, setRightTab] = React.useState<string>(defaultRightTab);
-  const [isRightPanelCollapsed, setIsRightPanelCollapsed] =
-    React.useState(false);
+  const [isRightPanelCollapsed, setIsRightPanelCollapsed] = React.useState(
+    defaultRightPanelCollapsed,
+  );
   const effectiveRightPanelCollapsed = isRightPanelCollapsed || !showFilePanel;
   const didManualSwitchRef = React.useRef(false);
   const prevDefaultRef = React.useRef<string>(defaultRightTab);
@@ -148,10 +159,11 @@ export function ExecutionContainer({ sessionId }: ExecutionContainerProps) {
     didManualSwitchRef.current = false;
     prevDefaultRef.current = defaultRightTab;
     setRightTab(defaultRightTab);
+    setIsRightPanelCollapsed(defaultRightPanelCollapsed);
     setRuns([]);
     setSelectedRunId(null);
     setIsPinnedToHistory(false);
-  }, [defaultRightTab, sessionId]);
+  }, [defaultRightTab, defaultRightPanelCollapsed, sessionId]);
 
   React.useEffect(() => {
     void loadRuns();
@@ -318,6 +330,9 @@ export function ExecutionContainer({ sessionId }: ExecutionContainerProps) {
           ? () => setIsRightPanelCollapsed((collapsed) => !collapsed)
           : undefined
       }
+      hidePresetBadge={hidePresetBadge}
+      onCancelExecution={onCancelExecution}
+      collapsedChatContentInsetPercent={collapsedChatContentInsetPercent}
     />
   );
 

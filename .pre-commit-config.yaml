@@ -52,4 +52,4 @@ repos:
     hooks:
       - id: prettier
         name: repo · format (prettier)
-        exclude: ^backend/assets/
+        exclude: ^(backend/assets/|specs/)

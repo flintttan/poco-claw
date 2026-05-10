@@ -10,7 +10,8 @@ import type {
   MessageBlock,
   InputFile,
   ConfigSnapshot,
-} from "../types/index.ts";
+  AgentTriggerContext,
+} from "@/features/chat/types";
 
 // ---------------------------------------------------------------------------
 // Internal types
@@ -33,6 +34,7 @@ interface MessageContentShape {
   _type?: string;
   subtype?: string;
   content?: MessageContentBlock[];
+  metadata?: Record<string, unknown>;
   text?: string;
   result?: string;
   parent_tool_use_id?: string | null;
@@ -72,6 +74,20 @@ function typeIncludes(typeValue: unknown, needle: string): boolean {
 function cleanText(text: string): string {
   if (!text) return text;
   return text.replace(/\uFFFD/g, "");
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function extractTriggerContext(
+  contentObj: MessageContentShape,
+): AgentTriggerContext | undefined {
+  const metadata = contentObj.metadata;
+  if (!isRecord(metadata)) return undefined;
+  const triggerContext = metadata.trigger_context;
+  if (!isRecord(triggerContext)) return undefined;
+  return triggerContext as AgentTriggerContext;
 }
 
 function appendAssistantTextBlock(
@@ -388,6 +404,9 @@ export function parseMessages(
           content: textContent,
           status: "completed",
           timestamp: msg.created_at,
+          metadata: {
+            triggerContext: extractTriggerContext(contentObj),
+          },
           attachments: msg.attachments ?? undefined,
         });
       } else {

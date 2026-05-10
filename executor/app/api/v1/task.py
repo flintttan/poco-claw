@@ -5,6 +5,7 @@ from pathlib import Path
 from fastapi import APIRouter, BackgroundTasks
 
 from app.core.callback import CallbackClient
+from app.core.channel_runtime import ChannelRuntimeClient
 from app.core.computer import ComputerClient
 from app.core.memory import MemoryClient
 from app.core.user_input import UserInputClient
@@ -60,6 +61,13 @@ async def run_task(req: TaskRun, background_tasks: BackgroundTasks) -> dict:
         if req.config.memory_enabled
         else None
     )
+    channel_runtime_client = (
+        ChannelRuntimeClient(base_url=base_url, session_id=req.session_id)
+        if req.config.server_id
+        and req.config.channel_id
+        and req.config.agent_identity_id
+        else None
+    )
     hooks: list[AgentHook] = [
         WorkspaceHook(),
         TodoHook(),
@@ -75,6 +83,7 @@ async def run_task(req: TaskRun, background_tasks: BackgroundTasks) -> dict:
         run_id=req.run_id,
         user_input_client=user_input_client,
         memory_client=memory_client,
+        channel_runtime_client=channel_runtime_client,
         request_id=get_request_id(),
         trace_id=get_trace_id(),
     )

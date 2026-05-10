@@ -1,3 +1,5 @@
+import hashlib
+import json
 import logging
 import os
 import re
@@ -5,9 +7,9 @@ import time
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import Literal, cast
 
 from claude_agent_sdk import ClaudeAgentOptions
-from claude_agent_sdk.client import ClaudeSDKClient
 from claude_agent_sdk.types import (
     AgentDefinition as SdkAgentDefinition,
 )
@@ -17,11 +19,18 @@ from claude_agent_sdk.types import (
     HookMatcher,
     PermissionResultAllow,
     PermissionResultDeny,
+    ResultMessage,
     SdkPluginConfig,
     SyncHookJSONOutput,
 )
 from dotenv import load_dotenv
 
+from app.core.client_pool import ToolPermissionController, get_claude_sdk_client_pool
+from app.core.channel_runtime import (
+    CHANNEL_RUNTIME_MCP_SERVER_KEY,
+    ChannelRuntimeClient,
+    create_channel_runtime_mcp_server,
+)
 from app.core.memory import (
     MEMORY_MCP_SERVER_KEY,
     MemoryClient,
@@ -77,6 +86,7 @@ class AgentExecutor:
         run_id: str | None = None,
         user_input_client: UserInputClient | None = None,
         memory_client: MemoryClient | None = None,
+        channel_runtime_client: ChannelRuntimeClient | None = None,
         request_id: str | None = None,
         trace_id: str | None = None,
     ):
@@ -89,11 +99,134 @@ class AgentExecutor:
         self.memory_mcp_server = (
             create_memory_mcp_server(memory_client) if memory_client else None
         )
+        self.channel_runtime_client = channel_runtime_client
+        self.channel_runtime_mcp_server = (
+            create_channel_runtime_mcp_server(channel_runtime_client)
+            if channel_runtime_client
+            else None
+        )
         self._request_id = request_id
         self._trace_id = trace_id
         self.workspace = WorkspaceManager(
             mount_path=os.environ.get("WORKSPACE_PATH", "/workspace")
         )
+
+    def _build_tool_permission_handler(self, permission_mode: str):
+        executor = self
+
+        class ToolPermissionHandler:
+            def __init__(self) -> None:
+                self.plan_approved = permission_mode != "plan"
+
+            async def can_use_tool(self, tool_name, input_data, context):
+                if not executor.user_input_client:
+                    return PermissionResultDeny(
+                        message="User input client not configured"
+                    )
+
+                if permission_mode == "plan" and not self.plan_approved:
+                    allowed_in_plan_phase = {
+                        "Read",
+                        "Grep",
+                        "Glob",
+                        "TodoWrite",
+                        "Task",
+                        "Skill",
+                        "AskUserQuestion",
+                        "ExitPlanMode",
+                    }
+                    if tool_name not in allowed_in_plan_phase:
+                        return PermissionResultDeny(
+                            message=f"Tool '{tool_name}' is not allowed in plan mode before approval",
+                            interrupt=False,
+                        )
+
+                if tool_name == "AskUserQuestion":
+                    try:
+                        request_payload = {
+                            "session_id": executor.session_id,
+                            "tool_name": tool_name,
+                            "tool_input": input_data,
+                        }
+                        created = await executor.user_input_client.create_request(
+                            request_payload
+                        )
+                        request_id = created.get("id")
+                        if not request_id:
+                            return PermissionResultDeny(
+                                message="Failed to create user input request"
+                            )
+                        result = await executor.user_input_client.wait_for_answer(
+                            request_id=request_id,
+                            timeout_seconds=60,
+                        )
+                    except Exception:
+                        return PermissionResultDeny(
+                            message="User input handling failed"
+                        )
+
+                    if not result or result.get("answers") is None:
+                        return PermissionResultDeny(message="User input timeout")
+
+                    return PermissionResultAllow(
+                        updated_input={
+                            "questions": input_data.get("questions", []),
+                            "answers": result.get("answers", {}),
+                        }
+                    )
+
+                if tool_name == "ExitPlanMode":
+                    try:
+                        plan_expires_at = (
+                            datetime.now(timezone.utc) + timedelta(minutes=10)
+                        ).isoformat()
+                        request_payload = {
+                            "session_id": executor.session_id,
+                            "tool_name": tool_name,
+                            "tool_input": input_data,
+                            "expires_at": plan_expires_at,
+                        }
+                        created = await executor.user_input_client.create_request(
+                            request_payload
+                        )
+                        request_id = created.get("id")
+                        if not request_id:
+                            return PermissionResultDeny(
+                                message="Failed to create plan approval request"
+                            )
+                        result = await executor.user_input_client.wait_for_answer(
+                            request_id=request_id,
+                            timeout_seconds=600,
+                        )
+                    except Exception:
+                        return PermissionResultDeny(
+                            message="Plan approval handling failed"
+                        )
+
+                    if not result or result.get("answers") is None:
+                        return PermissionResultDeny(
+                            message="Plan approval timeout",
+                            interrupt=True,
+                        )
+
+                    answers = result.get("answers") or {}
+                    approved_raw = answers.get("approved")
+                    approved = (
+                        isinstance(approved_raw, str)
+                        and approved_raw.strip().lower() == "true"
+                    )
+                    if not approved:
+                        return PermissionResultDeny(
+                            message="Plan not approved",
+                            interrupt=True,
+                        )
+
+                    self.plan_approved = True
+                    return PermissionResultAllow(updated_input=input_data)
+
+                return PermissionResultAllow(updated_input=input_data)
+
+        return ToolPermissionHandler()
 
     async def execute(
         self, prompt: str, config: TaskConfig, *, permission_mode: str = "default"
@@ -130,21 +263,7 @@ class AgentExecutor:
             # recognize them as commands.
             is_slash_command = prompt.lstrip().startswith("/")
             if not is_slash_command:
-                input_hint = self._build_input_hint(config)
-                if input_hint:
-                    prompt = f"{input_hint}\n\n{prompt}"
-
-                prompt_appendix = build_prompt_appendix(
-                    browser_enabled=config.browser_enabled,
-                    memory_enabled=bool(self.memory_mcp_server),
-                )
-                if prompt_appendix:
-                    prompt = f"{prompt}\n\n{prompt_appendix}"
-
-                prompt = f"{prompt}\n\nPlease reply in the same language as the user's input unless explicitly requested otherwise."
-                prompt = (
-                    f"{prompt}\n\n{self._build_workspace_scope_hint(ctx.cwd, config)}"
-                )
+                prompt = self._compose_user_prompt(prompt, config, cwd=ctx.cwd)
 
             async def dummy_hook(
                 input_data: HookInput, tool_use_id: str | None, context: HookContext
@@ -159,127 +278,18 @@ class AgentExecutor:
                 "bypassPermissions",
             }:
                 normalized_permission_mode = "default"
+            sdk_permission_mode = cast(
+                Literal["default", "acceptEdits", "plan", "bypassPermissions"],
+                normalized_permission_mode,
+            )
 
-            # Plan mode is a two-phase flow:
-            # - Phase 1 (planning): deny execution tools (Write/Bash/...) until ExitPlanMode is approved.
-            # - Phase 2 (execution): allow tools normally.
-            plan_approved = normalized_permission_mode != "plan"
-
-            async def can_use_tool(tool_name, input_data, context):
-                nonlocal plan_approved
-
-                if not self.user_input_client:
-                    return PermissionResultDeny(
-                        message="User input client not configured"
-                    )
-
-                # Enforce "plan" phase restrictions until the plan is approved.
-                if normalized_permission_mode == "plan" and not plan_approved:
-                    allowed_in_plan_phase = {
-                        "Read",
-                        "Grep",
-                        "Glob",
-                        "TodoWrite",
-                        "Task",
-                        "Skill",
-                        "AskUserQuestion",
-                        "ExitPlanMode",
-                    }
-                    if tool_name not in allowed_in_plan_phase:
-                        return PermissionResultDeny(
-                            message=f"Tool '{tool_name}' is not allowed in plan mode before approval",
-                            interrupt=False,
-                        )
-
-                if tool_name == "AskUserQuestion":
-                    try:
-                        request_payload = {
-                            "session_id": self.session_id,
-                            "tool_name": tool_name,
-                            "tool_input": input_data,
-                        }
-                        created = await self.user_input_client.create_request(
-                            request_payload
-                        )
-                        request_id = created.get("id")
-                        if not request_id:
-                            return PermissionResultDeny(
-                                message="Failed to create user input request"
-                            )
-                        result = await self.user_input_client.wait_for_answer(
-                            request_id=request_id,
-                            timeout_seconds=60,
-                        )
-                    except Exception:
-                        return PermissionResultDeny(
-                            message="User input handling failed"
-                        )
-
-                    if not result or result.get("answers") is None:
-                        return PermissionResultDeny(message="User input timeout")
-
-                    return PermissionResultAllow(
-                        updated_input={
-                            "questions": input_data.get("questions", []),
-                            "answers": result.get("answers", {}),
-                        }
-                    )
-
-                if tool_name == "ExitPlanMode":
-                    # Ask the user to approve the plan (UX shows a dedicated card in the frontend).
-                    try:
-                        plan_expires_at = (
-                            datetime.now(timezone.utc) + timedelta(minutes=10)
-                        ).isoformat()
-                        request_payload = {
-                            "session_id": self.session_id,
-                            "tool_name": tool_name,
-                            "tool_input": input_data,
-                            "expires_at": plan_expires_at,
-                        }
-                        created = await self.user_input_client.create_request(
-                            request_payload
-                        )
-                        request_id = created.get("id")
-                        if not request_id:
-                            return PermissionResultDeny(
-                                message="Failed to create plan approval request"
-                            )
-                        result = await self.user_input_client.wait_for_answer(
-                            request_id=request_id,
-                            timeout_seconds=600,
-                        )
-                    except Exception:
-                        return PermissionResultDeny(
-                            message="Plan approval handling failed"
-                        )
-
-                    if not result or result.get("answers") is None:
-                        return PermissionResultDeny(
-                            message="Plan approval timeout",
-                            interrupt=True,
-                        )
-
-                    # Strict protocol: only treat answers["approved"] == "true" as approved.
-                    answers = result.get("answers") or {}
-                    approved_raw = answers.get("approved")
-                    approved = (
-                        isinstance(approved_raw, str)
-                        and approved_raw.strip().lower() == "true"
-                    )
-                    if not approved:
-                        return PermissionResultDeny(
-                            message="Plan not approved",
-                            interrupt=True,
-                        )
-
-                    plan_approved = True
-                    return PermissionResultAllow(updated_input=input_data)
-
-                return PermissionResultAllow(updated_input=input_data)
+            permission_handler = self._build_tool_permission_handler(
+                sdk_permission_mode
+            )
 
             mcp_servers = dict(config.mcp_config or {})
             mcp_servers = self._inject_memory_mcp(mcp_servers)
+            mcp_servers = self._inject_channel_runtime_mcp(mcp_servers)
             if config.browser_enabled:
                 mcp_servers = self._inject_playwright_mcp(mcp_servers)
 
@@ -327,39 +337,91 @@ class AgentExecutor:
                         if mount.container_path
                     }
                 )
-                options = ClaudeAgentOptions(
+
+                def build_options(
+                    controller: ToolPermissionController,
+                ) -> ClaudeAgentOptions:
+                    return ClaudeAgentOptions(
+                        cwd=ctx.cwd,
+                        add_dirs=[str(d) for d in extra_allowed_dirs],
+                        resume=self.sdk_session_id,
+                        # Load both user-level (~/.claude) and project-level (.claude) settings.
+                        # Skills are staged into user-level ~/.claude/skills (symlinked to /workspace/.claude_data).
+                        setting_sources=["user", "project"],
+                        allowed_tools=[
+                            "Skill",
+                            "Read",
+                            "Edit",
+                            "Write",
+                            "Bash",
+                            "TodoWrite",
+                            "Grep",
+                            "Glob",
+                            "Task",
+                        ],
+                        mcp_servers=mcp_servers,
+                        permission_mode=sdk_permission_mode,
+                        model=selected_model,
+                        can_use_tool=controller.can_use_tool,
+                        hooks={
+                            "PreToolUse": [
+                                HookMatcher(matcher=None, hooks=[dummy_hook])
+                            ]
+                        },
+                        agents=agents,
+                        plugins=plugins,
+                    )
+
+                cache_key = self._build_client_cache_key(config)
+                fingerprint = self._build_client_cache_fingerprint(
+                    config=config,
                     cwd=ctx.cwd,
-                    add_dirs=[str(d) for d in extra_allowed_dirs],
-                    resume=self.sdk_session_id,
-                    # Load both user-level (~/.claude) and project-level (.claude) settings.
-                    # Skills are staged into user-level ~/.claude/skills (symlinked to /workspace/.claude_data).
-                    setting_sources=["user", "project"],
-                    allowed_tools=[
-                        "Skill",
-                        "Read",
-                        "Edit",
-                        "Write",
-                        "Bash",
-                        "TodoWrite",
-                        "Grep",
-                        "Glob",
-                        "Task",
-                    ],
+                    selected_model=selected_model,
+                    permission_mode=sdk_permission_mode,
+                    extra_allowed_dirs=extra_allowed_dirs,
                     mcp_servers=mcp_servers,
-                    permission_mode=normalized_permission_mode,
-                    model=selected_model,
-                    can_use_tool=can_use_tool,
-                    hooks={
-                        "PreToolUse": [HookMatcher(matcher=None, hooks=[dummy_hook])]
-                    },
                     agents=agents,
                     plugins=plugins,
                 )
-
-                async with ClaudeSDKClient(options=options) as client:
-                    await client.query(prompt)
-                    async for msg in client.receive_response():
+                pool = get_claude_sdk_client_pool()
+                async with await pool.acquire(
+                    key=cache_key,
+                    fingerprint=fingerprint,
+                    options_factory=build_options,
+                    delegate=permission_handler,
+                ) as lease:
+                    query_session_id = self.sdk_session_id or self.session_id
+                    logger.info(
+                        "sdk_client_lease_acquired",
+                        extra={
+                            "session_id": self.session_id,
+                            "run_id": self.run_id,
+                            "sdk_session_id": self.sdk_session_id,
+                            "cache_key": cache_key,
+                            "cache_hit": lease.cache_hit,
+                            "disconnect_on_release": lease.disconnect_on_release,
+                        },
+                    )
+                    step_started = time.perf_counter()
+                    await lease.client.query(prompt, session_id=query_session_id)
+                    logger.info(
+                        "timing",
+                        extra={
+                            "step": "executor_first_query_issued",
+                            "duration_ms": int(
+                                (time.perf_counter() - step_started) * 1000
+                            ),
+                            "session_id": self.session_id,
+                            "run_id": self.run_id,
+                            "sdk_session_id": self.sdk_session_id,
+                            "cache_key": cache_key,
+                            "cache_hit": lease.cache_hit,
+                        },
+                    )
+                    async for msg in lease.client.receive_response():
                         await self.hooks.run_on_response(ctx, msg)
+                        if self._is_terminal_response_message(msg):
+                            break
 
         except Exception as e:
             status = "failed"
@@ -386,6 +448,53 @@ class AgentExecutor:
             )
             reset_request_id(request_id_token)
             reset_trace_id(trace_id_token)
+
+    def _build_client_cache_key(self, config: TaskConfig) -> str | None:
+        if config.agent_runtime_mode != "persistent" or not config.agent_identity_id:
+            return None
+        return f"agent:{config.agent_identity_id}:session:{self.session_id}"
+
+    @staticmethod
+    def _is_terminal_response_message(message: object) -> bool:
+        return isinstance(message, ResultMessage) or (
+            type(message).__name__ == "ResultMessage"
+        )
+
+    @staticmethod
+    def _build_client_cache_fingerprint(
+        *,
+        config: TaskConfig,
+        cwd: str,
+        selected_model: str,
+        permission_mode: str,
+        extra_allowed_dirs: list[str],
+        mcp_servers: dict,
+        agents: dict[str, SdkAgentDefinition] | None,
+        plugins: list[SdkPluginConfig],
+    ) -> str:
+        payload = {
+            "cwd": cwd,
+            "model": selected_model,
+            "permission_mode": permission_mode,
+            "add_dirs": sorted(extra_allowed_dirs),
+            "mcp_servers": sorted(mcp_servers.keys()),
+            "mcp_server_ids": list(config.mcp_server_ids or []),
+            "skill_ids": list(config.skill_ids or []),
+            "plugin_ids": list(config.plugin_ids or []),
+            "agents": sorted((agents or {}).keys()),
+            "plugins": [
+                plugin_path
+                for plugin in plugins
+                if (plugin_path := getattr(plugin, "path", None))
+            ],
+            "browser_enabled": bool(config.browser_enabled),
+            "memory_enabled": bool(config.memory_enabled),
+            "channel_tools_enabled": bool(
+                config.server_id and config.channel_id and config.agent_identity_id
+            ),
+        }
+        encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+        return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
     def _build_input_hint(self, config: TaskConfig) -> str | None:
         lines: list[str] = []
@@ -464,6 +573,230 @@ class AgentExecutor:
             )
 
         return "\n".join(lines) if lines else None
+
+    @staticmethod
+    def _build_persistent_state_hint(config: TaskConfig) -> str | None:
+        if config.agent_runtime_mode != "persistent":
+            return None
+
+        return "\n".join(
+            [
+                "Persistent state contract:",
+                "- /agent_state is your private long-term state directory.",
+                "- Use /agent_state/MEMORY.md for durable facts, preferences, and collaboration constraints that should survive future sessions.",
+                "- Use /agent_state/state/*.json for structured runtime state such as active task bookkeeping.",
+                "- Use /agent_state/notes/ for working notes that may evolve during ongoing tasks.",
+                "- Do not overwrite system-owned fields in /agent_state/profile.json.",
+                "- Do not store short-lived task chatter or noisy scratch notes in long-term memory.",
+                "- Private state is not the same as published artifacts; share deliverables through workspace export or published artifacts instead.",
+            ]
+        )
+
+    @staticmethod
+    def _build_channel_task_hint(config: TaskConfig) -> str | None:
+        if not (config.server_id and config.channel_id and config.agent_identity_id):
+            return None
+
+        return "\n".join(
+            [
+                "Channel task collaboration contract:",
+                "- Session todos are internal execution planning only; they do not automatically create or update channel tasks.",
+                "- Use list_channel_tasks to inspect current channel tasks and read_channel_task when you need one task's full details before acting.",
+                "- When this work should become a team-visible task, prefer the structured tools create_channel_task, update_channel_task_status, claim_channel_task, and comment_on_channel_task.",
+                "- Use create_channel_task for durable collaborative work, not for temporary scratch todos.",
+                "- Use update_channel_task_status when the team-facing task changes stage, and use comment_on_channel_task when progress should be visible in the task thread.",
+                "- These task tools are scoped to the current server and channel context. Do not claim that you listed, read, created, or updated a task unless the structured tool call succeeded.",
+            ]
+        )
+
+    @staticmethod
+    def _build_channel_artifact_hint(config: TaskConfig) -> str | None:
+        if not (config.server_id and config.channel_id and config.agent_identity_id):
+            return None
+
+        return "\n".join(
+            [
+                "Channel artifact access contract:",
+                "- Published channel artifacts are shared read-only resources for this channel.",
+                "- Artifact logical_path values are controlled identifiers, not "
+                "/workspace filesystem paths.",
+                "- When you need shared files, first use list_channel_artifacts "
+                "or search_channel_artifacts, then read_channel_artifact by "
+                "artifact_id or logical_path.",
+                "- Do not guess that a published artifact exists under "
+                "/workspace, /agent_state, or a local mount path.",
+                "- These artifact tools are scoped to the current server and "
+                "channel context and never provide write access.",
+            ]
+        )
+
+    @staticmethod
+    def _build_channel_reaction_hint(config: TaskConfig) -> str | None:
+        if not (config.server_id and config.channel_id and config.agent_identity_id):
+            return None
+
+        return "\n".join(
+            [
+                "Channel message reaction contract:",
+                "- Reactions are lightweight message feedback, not reply messages.",
+                "- Use add_channel_message_reaction or remove_channel_message_reaction only for messages visible in the current channel.",
+                "- These tools are scoped to the current server, channel, and agent identity; do not pass or invent actor identity.",
+                "- Do not claim you reacted to a message unless the structured tool call succeeded.",
+            ]
+        )
+
+    @staticmethod
+    def _build_channel_runtime_hint(config: TaskConfig) -> str | None:
+        if not (config.server_id and config.channel_id and config.agent_identity_id):
+            return None
+
+        return "\n".join(
+            [
+                "Channel runtime tools contract:",
+                "- Use read_channel_messages with message_ids for exact messages, thread_root_message_id for a thread, anchor_message_id plus direction before/after for channel timeline paging, no selector for recent channel messages, or read_all=true only when you truly need the full channel timeline.",
+                "- Use list_channel_agents before requesting another agent's help when you need to discover available collaborators.",
+                "- Use request_agent_collaboration for explicit agent-to-agent collaboration; include the smallest useful request_text and references.",
+                "- Agent output that mentions @handle is visible text only and does not trigger another agent.",
+                "- Do not claim that you read messages or requested collaboration unless the structured tool call succeeded.",
+            ]
+        )
+
+    @staticmethod
+    def _build_channel_trigger_context_hint(config: TaskConfig) -> str | None:
+        context = config.trigger_context
+        if not isinstance(context, dict):
+            return None
+        if not (config.server_id and config.channel_id and config.agent_identity_id):
+            return None
+
+        source_actor = context.get("source_actor")
+        source_actor_label = ""
+        if isinstance(source_actor, dict):
+            actor_type = source_actor.get("actor_type") or "unknown"
+            display_name = source_actor.get("display_name")
+            user_id = source_actor.get("user_id")
+            agent_id = source_actor.get("agent_identity_id")
+            identity = user_id or agent_id
+            if display_name and identity:
+                source_actor_label = f"{actor_type} {display_name} ({identity})"
+            elif display_name:
+                source_actor_label = f"{actor_type} {display_name}"
+            elif identity:
+                source_actor_label = f"{actor_type} ({identity})"
+            else:
+                source_actor_label = str(actor_type)
+
+        lines = [
+            "Channel trigger context:",
+            "This is a channel collaboration run. You are responding as the target agent in a shared server/channel conversation, not as an isolated one-off chat session.",
+            "People and agents mentioned by name or @handle in the user request are likely channel collaborators. Do not assume you know every collaborator from this prompt alone; use list_channel_agents to discover channel agents when identity matters.",
+            "The identifiers below are routing and lookup handles. Use them with channel runtime tools instead of treating them as user-facing content.",
+            "",
+            "Field meanings:",
+            "- source_actor: the human, agent, or system actor whose message caused this run.",
+            "- trigger_type: how this run was started, such as channel_mention, agent_dm, or agent_collaboration.",
+            "- server_id: the long-lived collaboration workspace containing the channel.",
+            "- channel_id: the conversation scope whose messages, tasks, artifacts, reactions, and agents are available through channel tools.",
+            "- trigger_message_id: the message that directly triggered this run; read it when the visible prompt is ambiguous or truncated.",
+            "- thread_root_message_id: the root message of the current thread; use it to read thread context when the user is replying in a thread.",
+            "- target_agent_identity_id: your stable agent identity in this server.",
+            "- target_agent_handle is your channel handle in this run.",
+            "- reference_message_ids: messages selected or implied as context for this trigger.",
+            "- reference_artifact_ids: published channel artifacts selected as context; list or read artifacts before relying on their content.",
+            "- reference_task_ids: channel tasks selected as context.",
+            "- handoff_dedupe_key: an internal loop/deduplication key; do not show it to users unless explicitly asked.",
+            "",
+            "Raw trigger values:",
+            f"- version: {context.get('version', 1)}",
+            f"- trigger_type: {context.get('trigger_type') or config.trigger_type or 'unknown'}",
+            f"- server_id: {context.get('server_id') or config.server_id}",
+            f"- channel_id: {context.get('channel_id') or config.channel_id}",
+            f"- trigger_message_id: {context.get('trigger_message_id') or config.trigger_message_id}",
+            f"- thread_root_message_id: {context.get('thread_root_message_id') or config.thread_root_message_id}",
+            f"- target_agent_identity_id: {context.get('target_agent_identity_id') or config.agent_identity_id}",
+        ]
+        target_handle = context.get("target_agent_handle")
+        if target_handle:
+            lines.append(f"- target_agent_handle: {target_handle}")
+        if source_actor_label:
+            lines.append(f"- source_actor: {source_actor_label}")
+
+        references = context.get("references")
+        if isinstance(references, dict):
+            message_ids = references.get("message_ids") or []
+            artifact_ids = references.get("artifact_ids") or []
+            task_ids = references.get("task_ids") or []
+            lines.append(f"- reference_message_ids: {', '.join(message_ids) or 'none'}")
+            lines.append(
+                f"- reference_artifact_ids: {', '.join(artifact_ids) or 'none'}"
+            )
+            lines.append(f"- reference_task_ids: {', '.join(task_ids) or 'none'}")
+
+        handoff = context.get("handoff")
+        if isinstance(handoff, dict):
+            depth = handoff.get("depth")
+            dedupe_key = handoff.get("dedupe_key")
+            if depth is not None:
+                lines.append(f"- handoff_depth: {depth}")
+            if dedupe_key:
+                lines.append(f"- handoff_dedupe_key: {dedupe_key}")
+
+        lines.extend(
+            [
+                "",
+                "Channel context access contract:",
+                "- Treat the visible user prompt as the trigger body.",
+                "- Other named people or agents in the user request may refer to channel members or channel agents. Use list_channel_agents when you need to resolve who they are or what handles are available.",
+                "- Use read_channel_messages with trigger_message_id, thread_root_message_id, reference_message_ids, anchor_message_id plus direction before/after, no selector, or read_all=true when you need channel history beyond the visible prompt.",
+                "- Use list_channel_artifacts, search_channel_artifacts, and read_channel_artifact when you need shared files.",
+                "- Do not assume recent channel conversation or artifact content is fully inlined in this prompt.",
+            ]
+        )
+        return "\n".join(lines)
+
+    def _compose_user_prompt(self, prompt: str, config: TaskConfig, *, cwd: str) -> str:
+        sections = [prompt]
+
+        input_hint = self._build_input_hint(config)
+        if input_hint:
+            sections.insert(0, input_hint)
+
+        channel_trigger_hint = self._build_channel_trigger_context_hint(config)
+        if channel_trigger_hint:
+            sections.insert(0, channel_trigger_hint)
+
+        persistent_state_hint = self._build_persistent_state_hint(config)
+        if persistent_state_hint:
+            sections.append(persistent_state_hint)
+
+        channel_task_hint = self._build_channel_task_hint(config)
+        if channel_task_hint:
+            sections.append(channel_task_hint)
+
+        channel_artifact_hint = self._build_channel_artifact_hint(config)
+        if channel_artifact_hint:
+            sections.append(channel_artifact_hint)
+
+        channel_runtime_hint = self._build_channel_runtime_hint(config)
+        if channel_runtime_hint:
+            sections.append(channel_runtime_hint)
+
+        channel_reaction_hint = self._build_channel_reaction_hint(config)
+        if channel_reaction_hint:
+            sections.append(channel_reaction_hint)
+
+        prompt_appendix = build_prompt_appendix(
+            browser_enabled=config.browser_enabled,
+            memory_enabled=bool(getattr(self, "memory_mcp_server", None)),
+        )
+        if prompt_appendix:
+            sections.append(prompt_appendix)
+
+        sections.append(
+            "Please reply in the same language as the user's input unless explicitly requested otherwise."
+        )
+        sections.append(self._build_workspace_scope_hint(cwd, config))
+        return "\n\n".join(section for section in sections if section)
 
     @staticmethod
     def _build_workspace_scope_hint(cwd: str, config: TaskConfig) -> str:
@@ -581,4 +914,15 @@ PY
 
         injected = dict(mcp_servers)
         injected[MEMORY_MCP_SERVER_KEY] = self.memory_mcp_server
+        return injected
+
+    def _inject_channel_runtime_mcp(self, mcp_servers: dict) -> dict:
+        """Inject built-in channel runtime MCP server for channel-scoped agent runs."""
+        if not self.channel_runtime_mcp_server:
+            return mcp_servers
+        if CHANNEL_RUNTIME_MCP_SERVER_KEY in mcp_servers:
+            return mcp_servers
+
+        injected = dict(mcp_servers)
+        injected[CHANNEL_RUNTIME_MCP_SERVER_KEY] = self.channel_runtime_mcp_server
         return injected

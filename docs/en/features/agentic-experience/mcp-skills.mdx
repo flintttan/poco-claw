@@ -5,6 +5,22 @@ description: Extend agents with protocol-based tools and reusable skills.
 
 Poco supports the MCP protocol and custom Skills.
 
+## Runtime loading flow
+
+MCP servers and Skills usually enter runtime through a Preset or project config. When a task starts, Executor loads these capabilities in the sandbox and records calls as execution events.
+
+```mermaid
+flowchart TD
+    A["Preset / project config"] --> B["MCP servers"]
+    A --> C["Skills"]
+    B --> D["Runtime tool registry"]
+    C --> D
+    D --> E["Agent SDK"]
+    E --> F["Tool call"]
+    F --> G["Execution event"]
+    G --> H["Playback and audit"]
+```
+
 ## Why it matters
 
 - Skills can be imported and reused easily

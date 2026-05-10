@@ -1,11 +1,4 @@
 {
   "title": "IM Integration",
-  "pages": [
-    "!index",
-    "common",
-    "telegram",
-    "dingtalk",
-    "troubleshooting",
-    "security"
-  ]
+  "pages": ["common", "telegram", "dingtalk", "troubleshooting", "security"]
 }

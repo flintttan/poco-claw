@@ -5,6 +5,21 @@ description: Control and observe agents from mobile devices.
 
 Poco supports mobile scenarios so you can manage agents away from your desk.
 
+## Mobile follow-up flow
+
+Mobile reads the same task and execution state from Backend. You can inspect channel updates, run state, and notifications, then decide whether a lightweight action is enough or whether to continue on desktop.
+
+```mermaid
+flowchart TD
+    A["Agent run in backend"] --> B["Mobile notification"]
+    B --> C["Open mobile view"]
+    C --> D["Read status and latest messages"]
+    D --> E{"Need action?"}
+    E -->|"Lightweight"| F["Reply / approve / stop"]
+    E -->|"Complex"| G["Continue on Web"]
+    F --> A
+```
+
 ## Benefits
 
 - Check execution progress anytime

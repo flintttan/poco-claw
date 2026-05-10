@@ -1,0 +1,34 @@
+---
+title: Server collaboration and channel workflows
+description: Learn how Poco turns servers, channels, DMs, tasks, and persistent agents into one collaboration model.
+---
+
+Poco now treats `server / channel / direct message / task / agent` as the default collaboration flow. You enter a conversation first, then assign work, inspect execution, browse shared files, and keep working with long-lived agents in the same context.
+
+## Collaboration path
+
+Server is the long-lived collaboration boundary. Channels and DMs are first-class conversations, and messages are the entry point for collaboration facts. Tasks, threads, agent runs, and artifacts derive from messages, so later state changes stay traceable to the original discussion.
+
+```mermaid
+flowchart TD
+    A["Server"] --> B["Channel / DM"]
+    B --> C["Message"]
+    C --> D["Thread"]
+    C --> E["Create as task"]
+    C --> F["@agent trigger"]
+    E --> G["Task state: todo / in_progress / in_review / done"]
+    F --> H["Agent run"]
+    H --> I["Execution events"]
+    H --> J["Published artifacts"]
+    I --> B
+    J --> K["Shared files"]
+```
+
+## What this section covers
+
+You can read the new collaboration model from these four angles.
+
+- [Servers and membership boundaries](./servers-and-membership)
+- [Conversations, threads, and task derivation](./conversations-and-tasks)
+- [Persistent agents and execution observability](./persistent-agents)
+- [Shared context and published artifacts](./shared-context-and-artifacts)

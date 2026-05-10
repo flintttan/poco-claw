@@ -5,6 +5,26 @@ description: Let agents perform web research and information synthesis directly.
 
 Poco includes a browser capability for autonomous web interaction.
 
+## Browser event flow
+
+When a Preset or task enables browser capability, Executor exposes browser tools to the run. Navigation, clicks, screenshots, and page reads become execution events that users can review later.
+
+```mermaid
+sequenceDiagram
+    participant Agent as Agent
+    participant Browser as Browser tool
+    participant Web as Web page
+    participant Backend as Backend
+    participant UI as Playback UI
+
+    Agent->>Browser: Open page or search references
+    Browser->>Web: Navigate, click, and read content
+    Web-->>Browser: Return page state and content
+    Browser-->>Agent: Return observation
+    Browser-->>Backend: Record browser event
+    Backend-->>UI: Show playback or screenshot
+```
+
 ## Typical usage
 
 - Online research

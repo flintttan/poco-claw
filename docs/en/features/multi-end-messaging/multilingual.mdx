@@ -5,6 +5,20 @@ description: Make the product and documentation accessible across languages.
 
 Poco aims to support multiple languages in both product experience and documentation.
 
+## Localization flow
+
+Product UI, documentation, and notifications all start from the same language preference. When a user switches language, the UI resources, docs locale, and notification templates follow that setting.
+
+```mermaid
+flowchart TD
+    A["Language preference"] --> B["Frontend i18n resources"]
+    A --> C["Docs locale"]
+    A --> D["Notification templates"]
+    B --> E["Web UI"]
+    C --> F["Docs pages"]
+    D --> G["IM / email messages"]
+```
+
 ## Benefits
 
 - Better onboarding for global users

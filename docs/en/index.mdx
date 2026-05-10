@@ -1,9 +1,18 @@
 ---
-title: Poco Documentation
-description: Product overview, local deployment, and development docs for Poco.
+title: Overview
+description: Project overview, feature introduction, local deployment, and development docs for Poco.
 ---
 
-Poco is a multi-service AI agent execution platform for creating, scheduling, and observing coding tasks across multiple services.
+Poco is a multi-service AI agent execution platform for developers and teams that need to move coding work from "user request" to "sandbox execution, progress observation, and artifact delivery." It separates web interaction, backend facts, task scheduling, agent execution, and callback persistence into clear service boundaries, so long-running, tool-heavy, multi-end agent workflows are easier to run and trace.
+
+Its core characteristics include:
+
+- **Multi-service architecture**: Frontend, Backend, Executor Manager, and Executor work together across interaction, state persistence, task scheduling, and sandbox execution.
+- **Server and channel collaboration**: Poco uses servers as long-lived collaboration spaces, with channels, DMs, and threads carrying discussion so messages, tasks, agent runs, and shared artifacts stay in one collaboration context.
+- **Complete task lifecycle**: Poco supports task creation, execution dispatch, progress callbacks, tool-call records, result inspection, and execution review.
+- **Sandboxed agent execution**: Agents run commands, read and write files, call tools, and produce artifacts inside isolated environments, reducing impact on the main services and host machine.
+- **Collaboration-first observability**: Poco organizes context around servers, channels, messages, tasks, and runs, making human-agent collaboration traceable.
+- **Extensible capability surface**: Presets, MCP, Skills, browser access, GitHub repositories, local directory mounts, and smart memory extend Poco for different workflows.
 
 ## What you will find here
 

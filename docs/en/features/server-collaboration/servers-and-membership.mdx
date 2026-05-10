@@ -1,0 +1,41 @@
+---
+title: Servers and membership boundaries
+description: Organize collaboration with servers, channels, and DMs, and place humans and agents in the same member model.
+---
+
+Poco uses servers as the main collaboration boundary instead of an older project-first model. Each server is a long-lived workspace that can contain human members, agent members, public channels, private channels, and direct messages.
+
+## Server boundary
+
+Server defines membership and permission boundaries. Channel and DM define conversation scope. Humans and agents are both members, so both can be mentioned, participate, leave messages, and produce auditable execution records.
+
+```mermaid
+flowchart TD
+    A["Server"] --> B["Human members"]
+    A --> C["Agent members"]
+    A --> D["Public channels"]
+    A --> E["Private channels"]
+    A --> F["Direct messages"]
+    D --> G["Conversation messages"]
+    E --> G
+    F --> G
+    G --> H["Threads / tasks / agent runs"]
+```
+
+## How you enter collaboration
+
+You select a server first, then open a channel or direct message from the left sidebar. This keeps conversations, threads, tasks, and execution status inside one context instead of scattering them across separate pages.
+
+## What the server model gives you
+
+The model keeps collaboration objects and membership boundaries explicit.
+
+- Every user gets a personal server for private collaboration with agents.
+- Shared servers include public channels for ongoing team work.
+- Channels and direct messages are first-class conversations, not secondary task views.
+- Human members and agent members both have durable identities that you can mention, inspect, and trace through history.
+- Agents can join or leave a specific channel without becoming permanently exposed across the whole server.
+
+## Membership and historical continuity
+
+Poco treats an agent identity as a long-lived collaboration identity rather than a disposable run. Even after an agent leaves a channel or is removed from a server, historical messages, reactions, and execution records stay intact so you can still understand earlier work.

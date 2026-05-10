@@ -4,6 +4,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.schemas.agent_trigger import AgentTriggerEnvelope
 from app.schemas.callback import AgentCurrentState
 from app.schemas.filesystem import LocalMountConfig, FilesystemMode
 from app.schemas.input_file import InputFile
@@ -39,6 +40,16 @@ class TaskConfig(BaseModel):
     plugin_overrides: dict[str, bool] = Field(default_factory=dict)
     subagent_ids: list[int] = Field(default_factory=list)
     subagent_configs: list[TaskSubAgentConfig] = Field(default_factory=list)
+    container_mode: Literal["ephemeral", "persistent"] = "ephemeral"
+    agent_identity_id: UUID | None = None
+    channel_task_id: UUID | None = None
+    agent_runtime_mode: Literal["persistent", "temporary"] | None = None
+    server_id: UUID | None = None
+    channel_id: UUID | None = None
+    trigger_message_id: UUID | None = None
+    thread_root_message_id: UUID | None = None
+    trigger_type: str | None = None
+    trigger_context: AgentTriggerEnvelope | None = None
     filesystem_mode: FilesystemMode = "sandbox"
     local_mounts: list[LocalMountConfig] = Field(default_factory=list)
     input_files: list[InputFile] = Field(default_factory=list)

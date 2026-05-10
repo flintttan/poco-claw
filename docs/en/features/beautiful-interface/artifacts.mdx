@@ -5,6 +5,24 @@ description: Preview rich task outputs such as HTML, PDF, Markdown, images, vide
 
 Poco provides a dedicated interface for rendered outputs.
 
+## Artifact pipeline
+
+After an agent generates files in the sandbox, Poco registers shareable outputs as artifacts. Users can preview them in the artifact view or reuse them as shared files in server collaboration.
+
+```mermaid
+flowchart TD
+    A["Executor workspace"] --> B["Generated files"]
+    B --> C["Artifact collector"]
+    C --> D["Artifact metadata"]
+    D --> E["Preview router"]
+    E --> F["Markdown viewer"]
+    E --> G["HTML preview"]
+    E --> H["PDF viewer"]
+    E --> I["Image / video viewer"]
+    E --> J["Diagram viewers"]
+    D --> K["Shared files"]
+```
+
 ## Supported output examples
 
 - HTML

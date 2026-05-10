@@ -1,4 +1,4 @@
 {
   "title": "Not Just a ChatBot",
-  "pages": ["!index", "plan-mode", "project-management", "file-upload"]
+  "pages": ["plan-mode", "project-management", "file-upload"]
 }

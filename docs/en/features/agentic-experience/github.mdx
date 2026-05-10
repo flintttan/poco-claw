@@ -5,6 +5,25 @@ description: Connect repositories for code search, reading, and editing workflow
 
 Poco can connect to GitHub repositories as part of the execution workflow.
 
+## Repository execution flow
+
+Repository configuration can come from project defaults, the task editor, or Preset-linked capability settings. At runtime, Poco turns that repository context into workspace files and tool access for the agent.
+
+```mermaid
+flowchart TD
+    A["Project or task repository config"] --> B["Resolve repository and branch"]
+    B --> C["Prepare workspace"]
+    C --> D["Executor sandbox"]
+    D --> E["Code search"]
+    D --> F["Read files"]
+    D --> G["Edit files"]
+    D --> H["Run checks"]
+    E --> I["Execution events"]
+    F --> I
+    G --> I
+    H --> I
+```
+
 ## Supported value
 
 - Repository-aware code search

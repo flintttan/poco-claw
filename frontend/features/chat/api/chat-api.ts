@@ -147,6 +147,16 @@ export const chatService = {
     );
   },
 
+  cancelCurrentRun: async (
+    sessionId: string,
+    payload?: SessionCancelRequest,
+  ): Promise<SessionCancelResponse> => {
+    return apiClient.post<SessionCancelResponse>(
+      API_ENDPOINTS.sessionCancelCurrentRun(sessionId),
+      payload ?? {},
+    );
+  },
+
   branchSession: async (
     sessionId: string,
     payload: SessionBranchRequest,

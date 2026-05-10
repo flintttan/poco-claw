@@ -34,7 +34,9 @@ class Settings(BaseSettings):
     oauth_session_cookie_name: str = Field(
         default="poco_oauth", alias="OAUTH_SESSION_COOKIE_NAME"
     )
-    auth_mode: Literal["oauth_required", "oauth_optional", "single_user"] = Field(
+    auth_mode: Literal[
+        "disabled", "oauth_required", "oauth_optional", "single_user"
+    ] = Field(
         default="oauth_required",
         alias="AUTH_MODE",
     )
@@ -42,6 +44,14 @@ class Settings(BaseSettings):
     google_client_secret: str | None = Field(default=None, alias="GOOGLE_CLIENT_SECRET")
     github_client_id: str | None = Field(default=None, alias="GITHUB_CLIENT_ID")
     github_client_secret: str | None = Field(default=None, alias="GITHUB_CLIENT_SECRET")
+    workspace_features_enabled: bool = Field(
+        default=True,
+        alias="WORKSPACE_FEATURES_ENABLED",
+    )
+    audit_rules: dict[str, bool] = Field(
+        default_factory=lambda: {"default": True},
+        alias="AUDIT_RULES",
+    )
     single_user_id: str = Field(default="default", alias="SINGLE_USER_ID")
     single_user_name: str = Field(default="Local User", alias="SINGLE_USER_NAME")
     system_admin_emails: Annotated[list[str], NoDecode] = Field(
@@ -55,6 +65,12 @@ class Settings(BaseSettings):
     # External services
     executor_manager_url: str = Field(
         default="http://localhost:8001", alias="EXECUTOR_MANAGER_URL"
+    )
+    executor_manager_run_notify_enabled: bool = Field(
+        default=True, alias="EXECUTOR_MANAGER_RUN_NOTIFY_ENABLED"
+    )
+    executor_manager_run_notify_timeout_seconds: float = Field(
+        default=1.0, alias="EXECUTOR_MANAGER_RUN_NOTIFY_TIMEOUT_SECONDS"
     )
     im_event_dispatch_enabled: bool = Field(
         default=False, alias="IM_EVENT_DISPATCH_ENABLED"

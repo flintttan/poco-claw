@@ -127,16 +127,16 @@ class AuthService:
     def get_configured_providers(self) -> list[AuthProviderName]:
         settings = self._get_settings()
         providers: list[AuthProviderName] = []
-        if (settings.google_client_id or "").strip() and (
-            settings.google_client_secret or ""
+        if (getattr(settings, "google_client_id", None) or "").strip() and (
+            getattr(settings, "google_client_secret", None) or ""
         ).strip():
             providers.append("google")
-        if (settings.github_client_id or "").strip() and (
-            settings.github_client_secret or ""
+        if (getattr(settings, "github_client_id", None) or "").strip() and (
+            getattr(settings, "github_client_secret", None) or ""
         ).strip():
             providers.append("github")
-        if (settings.feishu_oauth_client_id or "").strip() and (
-            settings.feishu_oauth_client_secret or ""
+        if (getattr(settings, "feishu_oauth_client_id", None) or "").strip() and (
+            getattr(settings, "feishu_oauth_client_secret", None) or ""
         ).strip():
             providers.append("feishu")
         return providers
@@ -149,12 +149,10 @@ class AuthService:
         - if no providers are configured, the system falls back to single-user mode.
         """
         settings = self._get_settings()
-        if settings.auth_mode == "single_user":
+        auth_mode = getattr(settings, "auth_mode", "oauth_required")
+        if auth_mode in {"disabled", "single_user"}:
             return True
-        return (
-            settings.auth_mode == "oauth_optional"
-            and not self.get_configured_providers()
-        )
+        return auth_mode == "oauth_optional" and not self.get_configured_providers()
 
     def is_login_required(self) -> bool:
         return not self.is_single_user_mode_effective()
@@ -164,8 +162,13 @@ class AuthService:
 
     def get_auth_config(self) -> AuthConfigResponse:
         configured_providers = self.get_configured_providers()
+        settings = self._get_settings()
+        auth_mode = getattr(settings, "auth_mode", "oauth_required")
+        mode = "single_user" if auth_mode == "disabled" else auth_mode
+        if mode not in {"oauth_required", "oauth_optional", "single_user"}:
+            mode = "oauth_required"
         return AuthConfigResponse(
-            mode=self._get_settings().auth_mode,
+            mode=mode,
             login_required=self.is_login_required(),
             single_user_effective=self.is_single_user_mode_effective(),
             setup_required=self.is_setup_required(),
@@ -177,6 +180,9 @@ class AuthService:
                 )
                 for provider in SUPPORTED_AUTH_PROVIDERS
             ],
+            workspace_features_enabled=bool(
+                getattr(settings, "workspace_features_enabled", True)
+            ),
         )
 
     def _default_next_path(self) -> str:

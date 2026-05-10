@@ -5,6 +5,23 @@ description: Poco extends chat with planning, task organization, and file-aware 
 
 Poco is designed around execution workflows, not only conversation.
 
+## From chat to executable work
+
+A normal chat centers on one reply. Poco centers on executable work: a request can enter Plan Mode, bind project context and files, and run in the background while execution events and artifacts remain reviewable.
+
+```mermaid
+flowchart TD
+    A["User request"] --> B{"Need planning?"}
+    B -->|"Yes"| C["Plan Mode"]
+    B -->|"No"| D["Execute"]
+    C --> E["User review"]
+    E --> D
+    F["Project context"] --> D
+    G["Uploaded files"] --> D
+    D --> H["Execution events"]
+    H --> I["Result / artifacts / playback"]
+```
+
 ## Included capabilities
 
 - [Plan Mode and conversation controls](./plan-mode)

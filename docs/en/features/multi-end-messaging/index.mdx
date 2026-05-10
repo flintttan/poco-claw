@@ -5,6 +5,24 @@ description: Reach Poco through mobile, IM, self-hosting, and future cloud subsc
 
 Poco expands the interaction model beyond a single desktop browser session.
 
+## Shared fact source
+
+Multi-end support doesn't mean duplicating separate UIs with separate state. Web, mobile, and IM entry points all converge on the same backend facts for servers, channels, messages, tasks, runs, execution events, and notifications.
+
+```mermaid
+flowchart TD
+    A["Web UI"] --> D["Backend fact source"]
+    B["Mobile UI"] --> D
+    C["IM adapter"] --> D
+    D --> E["Server / channel / DM"]
+    D --> F["Task and run state"]
+    D --> G["Execution events"]
+    D --> H["Notifications"]
+    H --> A
+    H --> B
+    H --> C
+```
+
 ## Areas
 
 - [Mobile support](./mobile)

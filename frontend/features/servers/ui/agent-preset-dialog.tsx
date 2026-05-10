@@ -1,0 +1,144 @@
+"use client";
+
+import * as React from "react";
+import { Bot } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import type { Preset } from "@/features/capabilities/presets/lib/preset-types";
+import { useT } from "@/lib/i18n/client";
+
+export interface AgentPresetCreateInput {
+  presetId: number;
+  displayName: string;
+  handle: string;
+  description: string;
+}
+
+export function AgentPresetDialog({
+  open,
+  presets,
+  isWorking,
+  onOpenChange,
+  onCreateAgent,
+}: {
+  open: boolean;
+  presets: Preset[];
+  isWorking: boolean;
+  onOpenChange: (open: boolean) => void;
+  onCreateAgent: (input: AgentPresetCreateInput) => void;
+}) {
+  const { t } = useT("translation");
+  const [presetId, setPresetId] = React.useState("");
+  const [displayName, setDisplayName] = React.useState("");
+  const [handle, setHandle] = React.useState("");
+  const [description, setDescription] = React.useState("");
+
+  React.useEffect(() => {
+    if (!open) {
+      setPresetId("");
+      setDisplayName("");
+      setHandle("");
+      setDescription("");
+    }
+  }, [open]);
+
+  React.useEffect(() => {
+    const preset = presets.find((item) => String(item.preset_id) === presetId);
+    if (!preset) {
+      return;
+    }
+    setDisplayName((current) => current || preset.name);
+    setDescription((current) => current || preset.description || "");
+  }, [presetId, presets]);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{t("conversationView.agentPreset.title")}</DialogTitle>
+          <DialogDescription>
+            {t("conversationView.agentPreset.description")}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-foreground">
+              {t("conversationView.agentPreset.preset")}
+            </label>
+            <Select value={presetId} onValueChange={setPresetId}>
+              <SelectTrigger className="border-border bg-background">
+                <SelectValue
+                  placeholder={t("conversationView.agentPreset.selectPreset")}
+                />
+              </SelectTrigger>
+              <SelectContent>
+                {presets.map((preset) => (
+                  <SelectItem
+                    key={preset.preset_id}
+                    value={String(preset.preset_id)}
+                  >
+                    {preset.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Input
+              value={displayName}
+              onChange={(event) => setDisplayName(event.target.value)}
+              placeholder={t("conversationView.agentPreset.displayName")}
+            />
+            <Input
+              value={handle}
+              onChange={(event) => setHandle(event.target.value)}
+              placeholder={t("conversationView.agentPreset.handle")}
+            />
+          </div>
+          <Textarea
+            value={description}
+            onChange={(event) => setDescription(event.target.value)}
+            rows={4}
+            placeholder={t("conversationView.agentPreset.agentDescription")}
+            className="rounded-md border-border bg-background text-sm shadow-none"
+          />
+        </div>
+        <DialogFooter>
+          <Button
+            type="button"
+            size="sm"
+            onClick={() =>
+              onCreateAgent({
+                presetId: Number(presetId),
+                displayName,
+                handle,
+                description,
+              })
+            }
+            disabled={isWorking || !presetId || !displayName.trim()}
+          >
+            <Bot className="size-4" />
+            {t("conversationView.agentPreset.create")}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}

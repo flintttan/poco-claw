@@ -62,6 +62,17 @@ class SessionQueueService:
         db_session.cancellation_error = None
 
     @staticmethod
+    def _message_metadata_from_run_snapshot(
+        run_config_snapshot: dict[str, Any] | None,
+    ) -> dict[str, Any] | None:
+        if not isinstance(run_config_snapshot, dict):
+            return None
+        trigger_context = run_config_snapshot.get("trigger_context")
+        if not isinstance(trigger_context, dict):
+            return None
+        return {"trigger_context": trigger_context}
+
+    @staticmethod
     def _move_item_to_front(
         db: Session,
         *,
@@ -82,7 +93,7 @@ class SessionQueueService:
         self,
         db: Session,
         *,
-        db_session: AgentSession,
+        db_session: Any,
         item: AgentSessionQueueItem,
     ) -> AgentRun:
         run_snapshot = (
@@ -193,13 +204,21 @@ class SessionQueueService:
             client_request_id=normalized_request_id,
         )
         db.flush()
+        snapshot = (
+            dict(item.run_config_snapshot)
+            if isinstance(item.run_config_snapshot, dict)
+            else {}
+        )
+        snapshot["queue_item_id"] = str(item.id)
+        item.run_config_snapshot = snapshot or None
+        db.flush()
         return item
 
     def materialize_run(
         self,
         db: Session,
         *,
-        db_session: AgentSession,
+        db_session: Any,
         prompt: str,
         permission_mode: str,
         schedule_mode: str,
@@ -212,10 +231,13 @@ class SessionQueueService:
         self.clear_cancellation_state(db_session)
         db_session.config_snapshot = self.extract_session_config(run_config_snapshot)
 
-        user_message_content = {
+        user_message_content: dict[str, Any] = {
             "_type": "UserMessage",
             "content": [{"_type": "TextBlock", "text": normalized_prompt}],
         }
+        metadata = self._message_metadata_from_run_snapshot(run_config_snapshot)
+        if metadata is not None:
+            user_message_content["metadata"] = metadata
         db_message = MessageRepository.create(
             session_db=db,
             session_id=db_session.id,

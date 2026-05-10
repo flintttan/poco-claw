@@ -217,6 +217,39 @@ class SessionQueueItemRepository:
         return len(items)
 
     @staticmethod
+    def list_active_by_agent_scope(
+        session_db: Session,
+        *,
+        agent_identity_id: uuid.UUID,
+        channel_id: uuid.UUID | None = None,
+        for_update: bool = False,
+    ) -> list[AgentSessionQueueItem]:
+        query = session_db.query(AgentSessionQueueItem).filter(
+            AgentSessionQueueItem.status.in_(SessionQueueItemRepository.ACTIVE_STATUSES)
+        )
+        if for_update:
+            query = query.with_for_update()
+        agent_identity_id_text = str(agent_identity_id)
+        channel_id_text = str(channel_id) if channel_id is not None else None
+        items: list[AgentSessionQueueItem] = []
+        for item in query.all():
+            snapshot = item.run_config_snapshot
+            if not isinstance(snapshot, dict):
+                continue
+            if (
+                str(snapshot.get("agent_identity_id") or "").strip()
+                != agent_identity_id_text
+            ):
+                continue
+            if (
+                channel_id_text is not None
+                and str(snapshot.get("channel_id") or "").strip() != channel_id_text
+            ):
+                continue
+            items.append(item)
+        return items
+
+    @staticmethod
     def mark_paused(
         session_db: Session,
         *,

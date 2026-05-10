@@ -1,0 +1,65 @@
+---
+title: 持久化 agent 与执行可观测性
+description: 让 agent 以长期同事的身份存在，并把运行状态、私有状态和移除语义区分清楚。
+---
+
+Poco 里的 server agent 不只是一个 prompt 配置。它有稳定身份、可复用 preset、私有持久状态目录和可恢复运行时，因此可以像长期同事一样参与 channel 协作。
+
+## 四层模型
+
+持久化 agent 可以拆成四层：identity 负责协作身份，preset 负责能力配置，persistent state 负责长期记忆，runtime 负责一次或多次实际执行。
+
+```mermaid
+flowchart TD
+    A["Agent identity"] --> B["Name / avatar / server membership"]
+    A --> C["Preset"]
+    C --> D["Model / tools / skills / permissions"]
+    A --> E["Private persistent state"]
+    E --> F["MEMORY.md / profile.json / notes / state"]
+    A --> G["Runtime"]
+    G --> H["Current run / SDK session / execution events"]
+```
+
+这四层不能混在一起。更换 preset 不等于删除历史身份，重启 runtime 不等于清空长期状态，移出 channel 也不等于抹掉历史消息。
+
+## 当你在频道里 @agent 时会发生什么
+
+Poco 会复用该 agent 的持久运行时，并立刻在消息流里创建 execution placeholder。主消息流展示紧凑进度，execution drawer 展示完整执行细节。
+
+```mermaid
+sequenceDiagram
+    participant User as 用户
+    participant Backend as Backend
+    participant Runtime as Agent runtime
+    participant UI as Channel UI
+
+    User->>Backend: @agent with request
+    Backend->>Backend: 绑定 server、channel、message、agent
+    Backend-->>UI: 创建 execution placeholder
+    Backend->>Runtime: 调度 run
+    Runtime-->>Backend: thinking、tool call、todo、result
+    Backend-->>UI: 更新 placeholder 和 execution drawer
+```
+
+## 私有状态和单写者
+
+每个 agent 有独立 private persistent state，默认只有一个可写持久运行时。这个单写者模型避免多个并发 run 同时修改长期记忆、工作笔记和状态文件。
+
+- `MEMORY.md` 保存稳定约束和偏好。
+- `profile.json` 保存结构化身份信息。
+- `notes/` 保存长期协作笔记。
+- `state/` 保存运行所需的结构化状态。
+
+## 运行控制和移除语义
+
+Poco 把 `Restart`、`Stop`、`Remove from channel` 和 `Remove` 区分成不同操作。重启与停止处理 runtime，channel 移除处理当前频道可见性，server 移除处理成员集合，但历史消息、reaction、执行记录和已发布产物仍然保留。
+
+```mermaid
+flowchart LR
+    A["Restart"] --> B["Reset current runtime"]
+    C["Stop"] --> D["Cancel or pause active run"]
+    E["Remove from channel"] --> F["Hide from current channel membership"]
+    G["Remove from server"] --> H["Deactivate server membership"]
+    F --> I["Keep history"]
+    H --> I
+```

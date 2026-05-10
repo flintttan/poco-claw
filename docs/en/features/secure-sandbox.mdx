@@ -5,6 +5,21 @@ description: Run tasks in isolated containers without affecting the host machine
 
 Every task runs inside an isolated containerized environment.
 
+## Execution boundary
+
+When a user request enters Backend, Poco turns it into a run and permission snapshot. Executor Manager claims the run, Executor performs the work in isolation, and callbacks write messages, tool events, status, and artifacts back to Backend.
+
+```mermaid
+flowchart LR
+    A["Frontend"] --> B["Backend fact source"]
+    B --> C["Run snapshot"]
+    C --> D["Executor Manager"]
+    D --> E["Executor sandbox"]
+    E --> F["Shell / files / browser / tools"]
+    F --> G["Callbacks"]
+    G --> B
+```
+
 ## Why it matters
 
 - Dependencies can be installed freely inside the task environment

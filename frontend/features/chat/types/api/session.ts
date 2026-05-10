@@ -217,4 +217,5 @@ export interface TaskConfig {
   filesystem_mode?: FilesystemMode;
   local_mounts?: LocalMountConfig[];
   input_files?: InputFile[];
+  trigger_context?: Record<string, unknown> | null;
 }

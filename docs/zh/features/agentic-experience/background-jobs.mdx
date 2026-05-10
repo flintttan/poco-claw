@@ -1,12 +1,53 @@
 ---
 title: 后台执行与定时任务
-description: 即使关闭浏览器，Agent 也能继续在云端运行。
+description: 即使关闭浏览器，Agent 也能继续运行，并把状态回流到 server 协作界面。
 ---
 
-Poco 支持超出当前浏览器会话的长时间任务执行。
+Poco 支持超出当前浏览器会话的长时间任务执行。这不只影响单个聊天会话，也支撑 server/channel 中的持久化 agent 协作。
 
-## 亮点
+## 后台执行链路
 
-- 关闭浏览器后任务仍可继续运行
-- 支持定时任务与延迟执行
-- 更适合长任务与异步工作流
+当任务被创建后，Backend 保存 run，Executor Manager 负责领取和派发，Executor 在沙箱中执行。浏览器关闭只会影响当前 UI 连接，不会让已调度的 run 自动消失。
+
+```mermaid
+sequenceDiagram
+    participant UI as Browser UI
+    participant Backend as Backend
+    participant Manager as Executor Manager
+    participant Executor as Executor
+
+    UI->>Backend: 创建 run
+    Backend->>Backend: 保存 queued 状态
+    Manager->>Backend: claim run
+    Backend-->>Manager: 返回 run snapshot
+    Manager->>Executor: dispatch
+    UI--xBackend: 用户关闭浏览器
+    Executor-->>Backend: 持续回写 execution events
+    UI->>Backend: 用户稍后重新打开页面
+    Backend-->>UI: 返回最新状态和历史事件
+```
+
+这条链路首先解决“人不盯着页面时，任务仍能继续推进”。它也让 IM 通知、移动端查看和定时任务成为可能。
+
+## 定时与延迟执行
+
+Executor Manager 可以把任务作为可调度对象处理。任务不一定马上进入 Executor，可以延迟到指定时间或由后台调度器按规则触发。
+
+```mermaid
+flowchart TD
+    A["Create scheduled task"] --> B["Store schedule"]
+    B --> C["Scheduler tick"]
+    C --> D{"Due now?"}
+    D -->|"No"| C
+    D -->|"Yes"| E["Create or claim run"]
+    E --> F["Dispatch to executor"]
+    F --> G["Callbacks update backend"]
+```
+
+## 在 server 协作中的表现
+
+当你在频道里 `@agent` 时，Poco 可以复用该 agent 的持久运行时，让执行持续在后台推进。频道消息流会先看到紧凑的 execution placeholder，更完整的 thinking、tool call 和运行细节则进入 execution drawer。
+
+## 可靠性边界
+
+后台执行依赖 Backend 作为事实源。Executor Manager 可以重试和派发，Executor 可以回写事件，但频道消息、task 状态、artifact 索引和历史记录都以 Backend 持久化结果为准。

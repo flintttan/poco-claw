@@ -1,5 +1,6 @@
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
+from uuid import UUID
 
 from pydantic import BaseModel, Field
 
@@ -61,6 +62,15 @@ class TaskConfig(BaseModel):
     user_id: str = ""
     container_mode: Literal["ephemeral", "persistent"] = "ephemeral"
     container_id: str | None = None
+    agent_identity_id: UUID | None = None
+    channel_task_id: UUID | None = None
+    agent_runtime_mode: Literal["persistent", "temporary"] | None = None
+    server_id: UUID | None = None
+    channel_id: UUID | None = None
+    trigger_message_id: UUID | None = None
+    thread_root_message_id: UUID | None = None
+    trigger_type: str | None = None
+    trigger_context: dict[str, Any] | None = None
 
 
 class TaskCreateRequest(BaseModel):

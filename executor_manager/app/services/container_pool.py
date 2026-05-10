@@ -1,5 +1,6 @@
 import logging
 import time
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import docker
@@ -59,10 +60,20 @@ class ContainerPool:
             task_config,
             session_id=session_id,
         )
+        agent_state_mount = self._resolve_agent_state_mount(
+            task_config=task_config,
+            session_id=session_id,
+        )
         filesystem_mode = (
             "local_mount" if mount_resolution.resolved_mounts else "sandbox"
         )
         mount_fingerprint = mount_resolution.mount_fingerprint
+        resolved_container_id = self._resolve_agent_container_id(
+            task_config=task_config,
+            container_mode=container_mode,
+        )
+        if resolved_container_id:
+            container_id = resolved_container_id
         published_host = (
             self.settings.executor_published_host or ""
         ).strip() or "localhost"
@@ -127,8 +138,9 @@ class ContainerPool:
                     mount_resolution,
                 )
 
-        container_id = f"exec-{session_id[:8]}"
-        container_name = f"executor-{session_id[:8]}"
+        if not container_id:
+            container_id = f"exec-{session_id[:8]}"
+        container_name = f"executor-{container_id}"
 
         # Remove stale container with the same name (best-effort).
         step_started = time.perf_counter()
@@ -180,6 +192,12 @@ class ContainerPool:
             "browser_enabled": "true" if browser_enabled else "false",
             "filesystem_mode": filesystem_mode,
             "mount_fingerprint": mount_fingerprint,
+            "agent_identity_id": (
+                str(task_config.get("agent_identity_id")) if task_config else ""
+            ),
+            "agent_runtime_mode": (
+                str(task_config.get("agent_runtime_mode")) if task_config else ""
+            ),
         }
 
         step_started = time.perf_counter()
@@ -218,6 +236,7 @@ class ContainerPool:
             volumes=self._build_volume_map(
                 workspace_volume=workspace_volume,
                 mount_resolution=mount_resolution,
+                agent_state_mount=agent_state_mount,
             ),
             ports=ports,
             detach=True,
@@ -289,10 +308,16 @@ class ContainerPool:
         *,
         workspace_volume: str,
         mount_resolution: MountResolutionResult,
+        agent_state_mount: dict[str, str] | None = None,
     ) -> dict[str, dict[str, str]]:
         volumes: dict[str, dict[str, str]] = {
             workspace_volume: {"bind": "/workspace", "mode": "rw"}
         }
+        if agent_state_mount is not None:
+            volumes[agent_state_mount["source"]] = {
+                "bind": agent_state_mount["target"],
+                "mode": agent_state_mount["mode"],
+            }
         for mount in mount_resolution.resolved_mounts:
             logger.info(
                 "mount_attach",
@@ -308,6 +333,56 @@ class ContainerPool:
                 "mode": mount.access_mode,
             }
         return volumes
+
+    def _resolve_agent_container_id(
+        self,
+        *,
+        task_config: dict | None,
+        container_mode: str,
+    ) -> str | None:
+        if not isinstance(task_config, dict):
+            return None
+        agent_identity_id = str(task_config.get("agent_identity_id") or "").strip()
+        agent_runtime_mode = str(task_config.get("agent_runtime_mode") or "").strip()
+        if (
+            container_mode == "persistent"
+            and agent_identity_id
+            and agent_runtime_mode == "persistent"
+        ):
+            return f"agent-{agent_identity_id[:8]}"
+        return None
+
+    def _resolve_agent_state_mount(
+        self,
+        *,
+        task_config: dict | None,
+        session_id: str,
+    ) -> dict[str, str] | None:
+        if not isinstance(task_config, dict):
+            return None
+        agent_identity_id = str(task_config.get("agent_identity_id") or "").strip()
+        agent_runtime_mode = str(task_config.get("agent_runtime_mode") or "").strip()
+        if not agent_identity_id or agent_runtime_mode not in {
+            "persistent",
+            "temporary",
+        }:
+            return None
+        if agent_runtime_mode == "persistent":
+            source = self.workspace_manager.get_agent_state_dir(
+                agent_identity_id, create=True
+            )
+            mode = "rw"
+        else:
+            source = self.workspace_manager.create_agent_state_snapshot(
+                agent_identity_id,
+                session_id,
+            )
+            mode = "ro"
+        return {
+            "source": str(Path(source)),
+            "target": "/agent_state",
+            "mode": mode,
+        }
 
     def _get_reuse_mismatch_reasons(
         self,

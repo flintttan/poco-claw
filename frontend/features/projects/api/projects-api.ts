@@ -7,6 +7,13 @@ import type { ProjectItem, TaskHistoryItem } from "@/features/projects/types";
 interface ProjectApiResponse {
   project_id: string;
   user_id?: string;
+  scope?: "personal" | "workspace";
+  workspace_id?: string | null;
+  owner_user_id?: string | null;
+  created_by?: string | null;
+  updated_by?: string | null;
+  access_policy?: string | null;
+  forked_from_project_id?: string | null;
   name: string;
   description?: string | null;
   default_model?: string | null;
@@ -25,6 +32,13 @@ function mapProject(project: ProjectApiResponse): ProjectItem {
     id: project.project_id,
     name: project.name,
     userId: project.user_id,
+    scope: project.scope,
+    workspaceId: project.workspace_id ?? null,
+    ownerUserId: project.owner_user_id ?? null,
+    createdBy: project.created_by ?? null,
+    updatedBy: project.updated_by ?? null,
+    accessPolicy: project.access_policy ?? null,
+    forkedFromProjectId: project.forked_from_project_id ?? null,
     description: project.description ?? null,
     defaultModel: project.default_model ?? null,
     defaultPresetId: project.default_preset_id ?? null,
@@ -64,6 +78,27 @@ function mapSessionToTask(session: SessionResponse): TaskHistoryItem {
     isPinned: session.is_pinned ?? false,
     pinnedAt: session.pinned_at ?? null,
   };
+}
+
+function isServerScopedSession(session: SessionResponse): boolean {
+  const config = session.config_snapshot;
+  if (!config || typeof config !== "object") {
+    return false;
+  }
+
+  const serverId =
+    typeof config.server_id === "string" ? config.server_id.trim() : "";
+  const channelId =
+    typeof config.channel_id === "string" ? config.channel_id.trim() : "";
+  const triggerType =
+    typeof config.trigger_type === "string" ? config.trigger_type.trim() : "";
+
+  return Boolean(
+    serverId ||
+    channelId ||
+    triggerType === "channel_mention" ||
+    triggerType === "agent_dm",
+  );
 }
 
 export const projectsService = {
@@ -127,6 +162,27 @@ export const projectsService = {
   deleteProject: async (projectId: string): Promise<void> => {
     await apiClient.delete(API_ENDPOINTS.project(projectId));
   },
+
+  copyProject: async (
+    projectId: string,
+    payload: {
+      target_scope: "personal" | "workspace";
+      workspace_id?: string | null;
+      name?: string | null;
+      access_policy?:
+        | "private"
+        | "workspace_read"
+        | "workspace_write"
+        | "admins_only"
+        | null;
+    },
+  ): Promise<ProjectItem> => {
+    const project = await apiClient.post<ProjectApiResponse>(
+      API_ENDPOINTS.projectCopy(projectId),
+      payload,
+    );
+    return mapProject(project);
+  },
 };
 
 export const tasksService = {
@@ -161,10 +217,12 @@ export const tasksService = {
         }
       }
 
-      return sessionsResult.value.map((session) => ({
-        ...mapSessionToTask(session),
-        hasPendingUserInput: pendingSessionIds.has(session.session_id),
-      }));
+      return sessionsResult.value
+        .filter((session) => !isServerScopedSession(session))
+        .map((session) => ({
+          ...mapSessionToTask(session),
+          hasPendingUserInput: pendingSessionIds.has(session.session_id),
+        }));
     } catch (error) {
       console.warn(
         "[Tasks] Failed to fetch task history, using empty list",

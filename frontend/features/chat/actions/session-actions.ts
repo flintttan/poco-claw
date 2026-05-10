@@ -301,6 +301,13 @@ export async function cancelSessionAction(input: CancelSessionInput) {
   });
 }
 
+export async function cancelCurrentRunAction(input: CancelSessionInput) {
+  const { sessionId, reason } = cancelSessionSchema.parse(input);
+  return chatService.cancelCurrentRun(sessionId, {
+    reason: reason ?? undefined,
+  });
+}
+
 const branchSessionSchema = z.object({
   sessionId: z.string().trim().min(1, VALIDATION_ERRORS.missingSessionId),
   messageId: z.number().int().positive(),

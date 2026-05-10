@@ -114,7 +114,7 @@ class RunPullService:
                 f"Window opened (id={window_id}, until={until_utc.isoformat()}, schedule_modes={schedule_modes})"
             )
 
-        await self.poll(schedule_modes=schedule_modes)
+        await self.poll(schedule_modes=schedule_modes, trigger_source="window")
 
     async def poll_window(
         self,
@@ -136,9 +136,14 @@ class RunPullService:
             self._windows_until.pop(window_id, None)
             return
 
-        await self.poll(schedule_modes=schedule_modes)
+        await self.poll(schedule_modes=schedule_modes, trigger_source="window")
 
-    async def poll(self, schedule_modes: list[str] | None = None) -> None:
+    async def poll(
+        self,
+        schedule_modes: list[str] | None = None,
+        *,
+        trigger_source: str = "scheduler",
+    ) -> None:
         """Poll backend run queue and dispatch as many as capacity allows."""
         if self._shutdown:
             return
@@ -176,6 +181,7 @@ class RunPullService:
                             "worker_id": self.worker_id,
                             "lease_seconds": lease_seconds,
                             "schedule_modes": schedule_modes,
+                            "trigger_source": trigger_source,
                         },
                     )
             except asyncio.CancelledError:
@@ -191,6 +197,14 @@ class RunPullService:
                 return
 
             if not claim:
+                logger.info(
+                    "run_pull_no_claim",
+                    extra={
+                        "worker_id": self.worker_id,
+                        "schedule_modes": schedule_modes,
+                        "trigger_source": trigger_source,
+                    },
+                )
                 self._semaphore.release()
                 return
 

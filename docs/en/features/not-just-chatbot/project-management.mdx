@@ -5,6 +5,25 @@ description: Organize tasks, define project-level defaults, and switch between c
 
 Poco helps you organize work across different tasks, sessions, and contexts.
 
+## Project defaults flow
+
+When you create a session or task, project defaults expand into the run configuration. You can still override fields in the task editor, but the base context comes from the project.
+
+```mermaid
+flowchart TD
+    A["Project"] --> B["Default model"]
+    A --> C["Default preset"]
+    A --> D["Git repository"]
+    A --> E["Local mounts"]
+    A --> F["Project files"]
+    B --> G["New session"]
+    C --> G
+    D --> G
+    E --> G
+    F --> G
+    G --> H["Run snapshot"]
+```
+
 ## Project organization
 
 - Full isolation between projects — tasks, sessions, and configs stay separate

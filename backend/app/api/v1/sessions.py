@@ -223,6 +223,30 @@ async def cancel_session(
 
 
 @router.post(
+    "/{session_id}/cancel-current-run",
+    response_model=ResponseSchema[SessionCancelResponse],
+)
+async def cancel_current_run(
+    session_id: uuid.UUID,
+    request: SessionCancelRequest,
+    user_id: str = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+) -> JSONResponse:
+    """Cancel the currently running execution and keep queued follow-ups intact."""
+    result = session_service.cancel_current_execution(
+        db,
+        session_id,
+        user_id=user_id,
+        reason=request.reason,
+    )
+
+    return Response.success(
+        data=result,
+        message="Current execution cancellation requested successfully",
+    )
+
+
+@router.post(
     "/{session_id}/branch", response_model=ResponseSchema[SessionBranchResponse]
 )
 async def branch_session(

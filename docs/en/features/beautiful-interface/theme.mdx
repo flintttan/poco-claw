@@ -5,6 +5,20 @@ description: Switch between light and dark modes for different environments.
 
 Poco supports both light mode and dark mode.
 
+## Theme propagation
+
+Theme settings drive CSS variables that apply across the shell, message timeline, execution drawer, artifact viewer, and form controls.
+
+```mermaid
+flowchart TD
+    A["Theme setting"] --> B["CSS variables"]
+    B --> C["Application shell"]
+    B --> D["Message timeline"]
+    B --> E["Execution drawer"]
+    B --> F["Artifact viewer"]
+    B --> G["Forms and controls"]
+```
+
 ## Why it matters
 
 - Better readability in different lighting conditions

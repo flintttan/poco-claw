@@ -54,6 +54,33 @@ export type ToolCall = {
   status: "pending" | "running" | "completed" | "failed";
 };
 
+export type AgentTriggerContext = {
+  version?: number;
+  trigger_type?: string;
+  server_id?: string;
+  channel_id?: string;
+  trigger_message_id?: string;
+  thread_root_message_id?: string | null;
+  target_agent_identity_id?: string;
+  target_agent_handle?: string;
+  source_actor?: {
+    actor_type?: string;
+    user_id?: string | null;
+    agent_identity_id?: string | null;
+    display_name?: string | null;
+  };
+  references?: {
+    message_ids?: string[];
+    artifact_ids?: string[];
+    task_ids?: string[];
+  };
+  handoff?: {
+    parent_run_id?: string | null;
+    depth?: number;
+    dedupe_key?: string | null;
+  };
+};
+
 export type ChatMessage = {
   id: string;
   role: MessageRole;
@@ -65,6 +92,7 @@ export type ChatMessage = {
     tokensUsed?: number;
     duration?: number;
     toolCalls?: ToolCall[];
+    triggerContext?: AgentTriggerContext;
   };
   parentId?: string;
   attachments?: InputFile[];

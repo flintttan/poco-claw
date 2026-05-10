@@ -1,0 +1,173 @@
+import unittest
+import uuid
+from datetime import UTC, datetime
+from unittest.mock import MagicMock, patch
+
+from app.models.server_channel import ServerChannel
+from app.models.server_channel_task import ServerChannelTask
+from app.models.user import User
+from app.schemas.server_channel_task import (
+    ServerChannelTaskClaimRequest,
+    ServerChannelTaskCreateRequest,
+    ServerChannelTaskStatusUpdateRequest,
+)
+from app.services.server_channel_task_service import ServerChannelTaskService
+
+
+class ServerChannelTaskServiceTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.db = MagicMock()
+        self.user = User(
+            id="user-1",
+            primary_email="alice@example.com",
+            display_name="Alice",
+            avatar_url=None,
+            status="active",
+        )
+        self.server_id = uuid.uuid4()
+        self.channel = ServerChannel(
+            id=uuid.uuid4(),
+            server_id=self.server_id,
+            name="backend",
+            slug="backend",
+            visibility="public",
+            created_by="user-1",
+            archived_at=None,
+        )
+
+    def test_create_task_creates_task_and_root_message(self) -> None:
+        service = ServerChannelTaskService()
+
+        with (
+            patch.object(service, "_require_channel_access", return_value=self.channel),
+            patch(
+                "app.services.server_channel_task_service.ServerChannelTaskRepository.list_by_channel_and_status",
+                return_value=[],
+            ),
+            patch(
+                "app.services.server_channel_task_service.ServerChannelTaskRepository.create"
+            ) as create_task,
+            patch.object(service, "_create_task_root_message") as create_root_message,
+        ):
+            now = datetime.now(UTC)
+
+            def build_task(_db, task):
+                task.id = uuid.uuid4()
+                task.created_at = now
+                task.updated_at = now
+                return task
+
+            create_task.side_effect = build_task
+            create_root_message.return_value = MagicMock(id=uuid.uuid4())
+
+            result = service.create_task(
+                self.db,
+                self.user,
+                self.server_id,
+                self.channel.id,
+                ServerChannelTaskCreateRequest(
+                    title="Refactor channel task detail",
+                    description="Unify task activity blocks",
+                    status="todo",
+                ),
+            )
+
+        create_task.assert_called_once()
+        create_root_message.assert_called_once()
+        created_task = create_task.call_args.args[1]
+        self.assertEqual(created_task.title, "Refactor channel task detail")
+        self.assertEqual(result.channel_id, self.channel.id)
+        self.db.commit.assert_called_once()
+
+    def test_update_task_status_emits_system_message_for_status_change(self) -> None:
+        service = ServerChannelTaskService()
+        task = ServerChannelTask(
+            id=uuid.uuid4(),
+            server_id=self.server_id,
+            channel_id=self.channel.id,
+            title="Ship board view",
+            description=None,
+            status="todo",
+            position=0,
+            priority="medium",
+            creator_user_id="user-1",
+            updated_by="user-1",
+            thread_root_message_id=uuid.uuid4(),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+        )
+
+        with (
+            patch.object(
+                service,
+                "_require_task_access",
+                return_value=(self.channel, task),
+            ),
+            patch.object(service, "_move_task_within_channel") as move_task,
+            patch.object(service, "_create_system_message") as create_system_message,
+        ):
+
+            def apply_move(_db, moved_task, *, target_status, target_position):
+                moved_task.status = target_status
+                moved_task.position = target_position
+
+            move_task.side_effect = apply_move
+
+            result = service.update_task_status(
+                self.db,
+                self.user,
+                self.server_id,
+                self.channel.id,
+                task.id,
+                ServerChannelTaskStatusUpdateRequest(
+                    status="in_review",
+                    position=0,
+                ),
+            )
+
+        create_system_message.assert_called_once()
+        self.assertEqual(result.status, "in_review")
+        self.db.commit.assert_called_once()
+
+    def test_claim_task_defaults_to_current_user(self) -> None:
+        service = ServerChannelTaskService()
+        task = ServerChannelTask(
+            id=uuid.uuid4(),
+            server_id=self.server_id,
+            channel_id=self.channel.id,
+            title="Review detail drawer",
+            description=None,
+            status="todo",
+            position=0,
+            priority="medium",
+            creator_user_id="user-1",
+            updated_by="user-1",
+            thread_root_message_id=uuid.uuid4(),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+        )
+
+        with (
+            patch.object(
+                service,
+                "_require_task_access",
+                return_value=(self.channel, task),
+            ),
+            patch.object(service, "_create_system_message") as create_system_message,
+        ):
+            result = service.claim_task(
+                self.db,
+                self.user,
+                self.server_id,
+                self.channel.id,
+                task.id,
+                ServerChannelTaskClaimRequest(),
+            )
+
+        create_system_message.assert_called_once()
+        self.assertEqual(task.assignee_user_id, "user-1")
+        self.assertEqual(result.assignee_user_id, "user-1")
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -11,6 +11,9 @@
     "presets": "Presets",
     "openMain": "Open main sidebar",
     "scheduledTasks": "Scheduled Tasks",
+    "servers": "Servers",
+    "team": "Team",
+    "teamOverview": "Team Overview",
     "memories": "Memories",
     "projects": "Projects",
     "newProject": "New Project",
@@ -47,6 +50,665 @@
     "more": "More",
     "repoLink": "Project repository",
     "repoName": "poco-ai/poco-agent"
+  },
+  "servers": {
+    "title": "Servers",
+    "currentServer": "Current server: {{name}}",
+    "noServer": "No server selected",
+    "refresh": "Refresh",
+    "listTitle": "Server list",
+    "listDescription": "Choose a collaboration server before opening its channels.",
+    "createdAt": "Created {{date}}",
+    "selectPrompt": "Select a server to inspect channels.",
+    "channelsTitle": "Channels",
+    "channelsDescription": "Public and private channels define where messages and task threads live.",
+    "emptyChannelsTitle": "No channels yet",
+    "emptyChannelsDescription": "Create or join a channel to start collaboration here.",
+    "kinds": {
+      "personal": "Personal",
+      "shared": "Shared"
+    },
+    "channelVisibility": {
+      "public": "Public",
+      "private": "Private"
+    },
+    "agents": {
+      "title": "Agents",
+      "description": "Long-lived agents in this server expose their runtime state here before the chat-first conversation shell lands.",
+      "emptyTitle": "No agents yet",
+      "emptyDescription": "Create or attach an agent identity to start collaboration.",
+      "profileTitle": "Agent profile",
+      "runtimeStatus": "Runtime status",
+      "lastSynced": "Last synced",
+      "stateSummaryTitle": "Persistent state summary",
+      "stateSummaryDescription": "These paths define the long-lived memory and state boundary owned by the agent identity.",
+      "stateRoot": "State root",
+      "memoryFile": "Memory file",
+      "activeTask": "Active task",
+      "preset": "Preset #{{id}}",
+      "tempRuntime": "Temporary runtime",
+      "promote": "Promote result",
+      "tempRuntimeHint": "Temporary runtime controls move into the conversation panel in the next phase.",
+      "promoteHint": "Explicit promote actions will attach here after snapshot workflows land.",
+      "unknown": "Unknown",
+      "emptyValue": "Not available"
+    },
+    "toasts": {
+      "loadFailed": "Failed to load servers",
+      "channelsLoadFailed": "Failed to load channels"
+    }
+  },
+  "channelTasks": {
+    "title": "Channel tasks",
+    "subtitle": "{{server}} / #{{channel}}",
+    "loading": "Loading channel task context",
+    "channelDescription": "Tasks stay inside the channel and can switch between board and list views without leaving the collaboration context.",
+    "threadReady": "Thread linked",
+    "updatedAt": "Updated {{date}}",
+    "dropzone": "Drop here to move task",
+    "urlHint": "This view is synced through the `view={{view}}` query state for the current channel.",
+    "backToServers": "Back to servers",
+    "legacyEntryTitle": "Task collaboration moved",
+    "legacyEntryDescription": "The old team issue board is closed. Continue task work from the server and channel task pages.",
+    "openNewView": "Open server channels",
+    "actions": {
+      "refresh": "Refresh",
+      "newTask": "New task",
+      "createTask": "Create task",
+      "save": "Save",
+      "claim": "Claim",
+      "unclaim": "Unclaim"
+    },
+    "views": {
+      "list": "List",
+      "board": "Board"
+    },
+    "create": {
+      "title": "Create task",
+      "description": "Add a channel-native task that can move through the fixed workflow stages.",
+      "titlePlaceholder": "Task title",
+      "descriptionPlaceholder": "Describe the task context and expected outcome"
+    },
+    "statuses": {
+      "todo": "Todo",
+      "in_progress": "In progress",
+      "in_review": "In review",
+      "done": "Done"
+    },
+    "priorities": {
+      "low": "Low",
+      "medium": "Medium",
+      "high": "High",
+      "urgent": "Urgent"
+    },
+    "empty": {
+      "title": "No tasks yet",
+      "description": "Create the first task to start collaboration in this channel."
+    },
+    "detail": {
+      "title": "Task detail",
+      "description": "Review the task overview, collaboration activity, and execution handoff without leaving the channel context.",
+      "overview": "Overview",
+      "overviewDescription": "Keep the task title, description, and workflow state aligned with the current collaboration plan.",
+      "activity": "Collaboration activity",
+      "activityDescription": "Task creation, claim changes, and status updates stay attached to the channel thread.",
+      "emptyActivity": "No activity yet.",
+      "execution": "Execution summary",
+      "executionDescription": "This section reserves the stable handoff point for later agent runtime work.",
+      "executionPlaceholder": "Execution summary and runtime state will attach here once the channel task flow connects to the agent runtime.",
+      "currentStatus": "Current status: {{status}}",
+      "assigneeAttached": "Assignee attached",
+      "assigneePending": "Assignee pending"
+    },
+    "toasts": {
+      "loadFailed": "Failed to load channel tasks",
+      "created": "Task created",
+      "createFailed": "Failed to create task",
+      "moveFailed": "Failed to move task",
+      "detailLoadFailed": "Failed to load task detail",
+      "updated": "Task updated",
+      "updateFailed": "Failed to update task",
+      "claimed": "Task claimed",
+      "unclaimed": "Task unclaimed",
+      "claimFailed": "Failed to update task claim",
+      "statusUpdated": "Task status updated",
+      "statusFailed": "Failed to update task status"
+    }
+  },
+  "conversationView": {
+    "title": "Chat",
+    "search": "Search",
+    "searchInServer": "Search in server",
+    "inbox": "Inbox",
+    "saved": "Saved",
+    "mobile": {
+      "back": "Back to server navigation"
+    },
+    "channels": "Channels",
+    "directMessages": "Direct messages",
+    "noDirectMessages": "No direct messages yet",
+    "loading": "Loading conversation",
+    "chatTab": "Chat",
+    "tasksTab": "Tasks",
+    "colleaguesTab": "Colleagues",
+    "reply": "Reply",
+    "replyCount": "{{count}} replies",
+    "taskBadge": "Task",
+    "systemBadge": "System",
+    "emptyMessage": "No visible message content",
+    "messagePlaceholder": "Message #{{name}}",
+    "taskComposerPlaceholder": "Draft a message or convert it into a task",
+    "asTask": "As Task",
+    "send": "Send",
+    "save": "Save",
+    "unsave": "Unsave",
+    "boardView": "Board view",
+    "listView": "List view",
+    "searchPlaceholder": "Search channels, DMs, messages...",
+    "myMessages": "My messages",
+    "anyTime": "Any time",
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "searchEverything": "Search everything",
+    "searchEverythingDescription": "Search channels, DMs, people, agents, and message history.",
+    "activeCount": "{{count}} active",
+    "savedCount": "{{count}} saved",
+    "channelTasksLabel": "channel tasks",
+    "all": "All",
+    "unread": "Unread",
+    "noInbox": "No inbox items yet",
+    "noSaved": "No saved items yet",
+    "sharedArtifacts": {
+      "title": "Shared files",
+      "description": "Published artifacts grouped by agent",
+      "preview": "Preview",
+      "empty": "No published files yet"
+    },
+    "threadTitle": "Thread",
+    "threadDescription": "Replies stay attached to the current conversation context.",
+    "threadPlaceholder": "Message thread",
+    "close": "Close",
+    "backToContext": "View in channel",
+    "contextTitle": "Context panel",
+    "contextDescription": "Select a thread or agent to replace this panel with deeper context.",
+    "messageAgent": "Chat",
+    "taskDetail": "Task detail",
+    "taskActivity": "Task activity",
+    "noTaskActivity": "No task activity yet",
+    "emptyTaskColumn": "No {{status}} tasks.",
+    "emptyTaskListTitle": "No tasks yet",
+    "emptyTaskListDescription": "Channel tasks will appear here once messages are converted into work.",
+    "leave": "Leave",
+    "mentionCandidates": "Mention",
+    "mentionKinds": {
+      "agent": "Agent",
+      "human": "Human"
+    },
+    "createChannel": {
+      "title": "Create channel",
+      "name": "Name",
+      "namePlaceholder": "e.g. ai-research",
+      "description": "Description",
+      "descriptionPlaceholder": "What is this channel about?",
+      "members": "Members",
+      "optional": "(optional)",
+      "memberSearchPlaceholder": "Search members by name",
+      "create": "Create channel"
+    },
+    "leaveConfirm": {
+      "title": "Leave channel?",
+      "description": "You will leave #{{channel}} and stop participating in this channel.",
+      "ownerTitle": "Dissolve channel?",
+      "ownerDescription": "You own #{{channel}}. Leaving will dissolve this channel for everyone.",
+      "leave": "Leave",
+      "dissolve": "Dissolve"
+    },
+    "channelSettings": {
+      "title": "Channel settings",
+      "description": "Review channel details and administrative actions.",
+      "name": "Name",
+      "channelDescription": "Description",
+      "descriptionPlaceholder": "Describe what this channel is for",
+      "save": "Save changes",
+      "archive": "Archive",
+      "delete": "Delete"
+    },
+    "members": {
+      "title": "Members",
+      "description": "People and agents in #{{channel}}.",
+      "inviteAgents": "Invite agents",
+      "agentSearchPlaceholder": "Search agents by name",
+      "noAvailableAgents": "No additional agents available.",
+      "addSelectedAgents": "Add selected agents",
+      "agents": "Agents",
+      "humans": "Humans",
+      "noAgents": "No agents in this channel.",
+      "noHumans": "No human participants yet.",
+      "addMemberPlaceholder": "User ID",
+      "addMember": "Add member",
+      "removeAgent": "Remove agent from channel",
+      "removeHuman": "Remove member from channel"
+    },
+    "serverAccess": {
+      "title": "Server access",
+      "description": "Create a server, join one with an invite key, or manage the current server invite key.",
+      "createTitle": "Create server",
+      "createDescription": "Start a new server and switch to it.",
+      "serverName": "Server name",
+      "createAction": "Create",
+      "joinTitle": "Join server",
+      "joinDescription": "Paste an invite key from another member.",
+      "inviteKey": "Invite key",
+      "joinAction": "Join",
+      "invitesTitle": "Invite key",
+      "invitesDescription": "Invite key for {{server}}.",
+      "noServer": "Select a server first.",
+      "generateInvite": "Generate",
+      "inviteMeta": "{{used}} / {{max}} used",
+      "copyInvite": "Copy invite key",
+      "noInvites": "No invite key generated yet."
+    },
+    "agentPreset": {
+      "title": "Add agent",
+      "description": "Create a server agent from one of your presets.",
+      "preset": "Preset",
+      "selectPreset": "Select preset",
+      "displayName": "Display name",
+      "handle": "Handle",
+      "agentDescription": "Description",
+      "create": "Create agent"
+    },
+    "colleagues": {
+      "title": "Colleagues",
+      "detailTitle": "Profile",
+      "agents": "Agents",
+      "humans": "Humans",
+      "noAgents": "No server agents yet.",
+      "noHumans": "No human members yet.",
+      "description": "Description",
+      "lifecycle": "Lifecycle",
+      "created": "Created",
+      "role": "Role",
+      "joined": "Joined",
+      "invitedBy": "Invited by",
+      "persistentFiles": "Private state files",
+      "persistentFilesHint": "These files belong to the agent's private persistent state. They are not shared channel artifacts.",
+      "persistentFilesEmpty": "No private state files yet.",
+      "stateContractVersion": "State contract v{{version}}",
+      "profilePath": "Profile file",
+      "notesPath": "Notes directory",
+      "statePath": "State directory",
+      "artifactsPath": "Artifacts directory",
+      "editDescription": "Edit description",
+      "saveDescription": "Save description",
+      "agentDescriptionPlaceholder": "Describe what this agent should help with",
+      "agentEmptyDescription": "No description yet.",
+      "runtimeStates": {
+        "active": "Active",
+        "idle": "Idle",
+        "stopped": "Stopped",
+        "removed": "Removed",
+        "failed": "Failed",
+        "unknown": "Status unavailable"
+      },
+      "emptyValue": "Not available",
+      "emptySelection": "Select a colleague to inspect their profile.",
+      "removeMember": "Remove member",
+      "startAgent": "Start",
+      "restartAgent": "Restart",
+      "stopAgent": "Stop",
+      "removeFromChannel": "Remove from channel",
+      "removeFromServer": "Remove from server",
+      "remove": "Remove",
+      "startAgentTitle": "Start {{name}}?",
+      "startAgentDescription": "This will reactivate the agent for future channel tasks. Existing queued work is kept.",
+      "restartAgentTitle": "Restart {{name}}?",
+      "restartAgentDescription": "This will discard any currently running work for this agent and start it from a clean idle runtime. Queued work is kept.",
+      "stopAgentTitle": "Stop {{name}}?",
+      "stopAgentDescription": "This will discard any currently running work for this agent and prevent new channel tasks until it is started again. Queued work is kept.",
+      "removeAgentTitle": "Remove {{name}} from this server?",
+      "removeAgentDescription": "This will remove the agent from {{channels}} and other channels, and cancel queued work that has not started. Historical messages, reactions, and work output will be kept.",
+      "removeAgentDescriptionUnknown": "This will remove the agent from this server's channels and cancel queued work that has not started. Historical messages, reactions, and work output will be kept."
+    },
+    "threadMentionHint": "Replies in this thread will target",
+    "execution": {
+      "title": "Execution",
+      "openDrawer": "Open full execution details",
+      "emptySummary": "Execution started.",
+      "todoProgress": "{{completed}} / {{total}} todos",
+      "status": {
+        "queued": "Queued",
+        "running": "Running",
+        "canceling": "Canceling",
+        "canceled": "Canceled",
+        "completed": "Completed",
+        "failed": "Failed"
+      }
+    },
+    "toasts": {
+      "loadFailed": "Failed to load conversation",
+      "sendFailed": "Failed to send message",
+      "replyFailed": "Failed to send reply",
+      "threadFailed": "Failed to load thread",
+      "dmFailed": "Failed to open direct message",
+      "taskCreated": "Task created from message",
+      "channelCreated": "Channel created",
+      "channelCreateFailed": "Failed to create channel",
+      "channelUpdated": "Channel updated",
+      "channelUpdateFailed": "Failed to update channel",
+      "channelArchived": "Channel archived",
+      "channelArchiveFailed": "Failed to archive channel",
+      "channelDeleted": "Channel deleted",
+      "channelDeleteFailed": "Failed to delete channel",
+      "channelLeft": "Left channel",
+      "channelDissolved": "Channel dissolved",
+      "channelLeaveFailed": "Failed to leave channel",
+      "memberAdded": "Member added",
+      "memberAddFailed": "Failed to add member",
+      "agentAdded": "Agent added",
+      "agentAddFailed": "Failed to add agent",
+      "serverCreated": "Server created",
+      "serverCreateFailed": "Failed to create server",
+      "inviteAccepted": "Joined server",
+      "inviteAcceptFailed": "Failed to join server",
+      "inviteCreated": "Invite key generated",
+      "inviteCreateFailed": "Failed to generate invite key",
+      "inviteCopied": "Invite key copied",
+      "inviteCopyFailed": "Failed to copy invite key",
+      "agentCreated": "Agent created",
+      "agentCreateFailed": "Failed to create agent",
+      "agentUpdated": "Agent updated",
+      "agentUpdateFailed": "Failed to update agent",
+      "agentStarted": "Agent started",
+      "agentRestarted": "Agent restarted",
+      "agentRestartFailed": "Failed to restart agent",
+      "agentStopped": "Agent stopped",
+      "agentStopFailed": "Failed to stop agent",
+      "agentRemoved": "Agent removed",
+      "agentRemoveFailed": "Failed to remove agent",
+      "memberRemoved": "Member removed",
+      "memberRemoveFailed": "Failed to remove member",
+      "agentRemovedFromChannel": "Agent removed from channel",
+      "agentRemoveFromChannelFailed": "Failed to remove agent from channel",
+      "memberRemovedFromChannel": "Member removed from channel",
+      "memberRemoveFromChannelFailed": "Failed to remove member from channel",
+      "reactionFailed": "Failed to update reaction"
+    },
+    "reactions": {
+      "add": "Add reaction",
+      "pickerLabel": "Choose a reaction",
+      "addEmoji": "React with {{emoji}}",
+      "removeEmoji": "Remove {{emoji}} reaction"
+    }
+  },
+  "workspaces": {
+    "currentWorkspace": "Current workspace: {{name}}",
+    "noWorkspace": "No workspace selected",
+    "emptyValue": "Not available",
+    "refresh": "Refresh",
+    "switcher": {
+      "placeholder": "Select workspace"
+    },
+    "create": {
+      "placeholder": "New workspace name",
+      "action": "Create",
+      "dialogTitle": "Create workspace",
+      "dialogDescription": "Create a shared workspace and switch to it immediately."
+    },
+    "pages": {
+      "overview": {
+        "title": "Team"
+      },
+      "members": {
+        "title": "Team Members"
+      }
+    },
+    "summary": {
+      "kind": "Workspace type",
+      "members": "Members",
+      "invites": "Active invites"
+    },
+    "kinds": {
+      "personal": "Personal",
+      "shared": "Shared"
+    },
+    "roles": {
+      "owner": "Owner",
+      "admin": "Admin",
+      "member": "Member"
+    },
+    "activity": {
+      "title": "Activity",
+      "description": "Recent audited workspace operations.",
+      "empty": "No activity yet.",
+      "actions": {
+        "workspace.created": "Workspace created",
+        "workspace.deleted": "Workspace deleted",
+        "workspace.ownership_transferred": "Ownership transferred",
+        "workspace.member_joined": "Member joined",
+        "workspace.member_left": "Member left",
+        "workspace.member_removed": "Member removed",
+        "workspace.member_role_changed": "Member role changed",
+        "workspace.invite_created": "Invite created",
+        "workspace.invite_accepted": "Invite accepted",
+        "workspace.invite_revoked": "Invite revoked"
+      }
+    },
+    "members": {
+      "title": "Members",
+      "description": "Review workspace membership and role assignments.",
+      "empty": "No members found.",
+      "joinedAt": "Joined {{date}}"
+    },
+    "invites": {
+      "createTitle": "Create Invite",
+      "createDescription": "Generate a short-lived invite for this workspace.",
+      "createAction": "Create Invite",
+      "title": "Invites",
+      "description": "Review pending and revoked workspace invites.",
+      "empty": "No invites yet.",
+      "expiresAt": "Expires {{date}}",
+      "expired": "Expired",
+      "revoked": "Revoked",
+      "copy": "Copy"
+    },
+    "mobile": {
+      "back": "Back to team"
+    },
+    "toasts": {
+      "loadFailed": "Failed to load workspace data",
+      "created": "Workspace created",
+      "createFailed": "Failed to create workspace",
+      "inviteCreated": "Invite created",
+      "inviteFailed": "Failed to create invite",
+      "inviteCopied": "Invite token copied"
+    }
+  },
+  "issues": {
+    "title": "Issues",
+    "subtitle": "Track workspace boards and issue assignments.",
+    "selectBoard": "Select board",
+    "boardsTitle": "Boards",
+    "listTitle": "Issues",
+    "executionTitle": "Execution",
+    "refresh": "Refresh",
+    "searchPlaceholder": "Search issues...",
+    "boardNamePlaceholder": "New board name",
+    "issueTitlePlaceholder": "New issue title",
+    "emptyBoards": "No boards yet.",
+    "emptyIssues": "No issues yet.",
+    "emptySearch": "No issues match the current search.",
+    "emptyDescription": "No description yet.",
+    "none": "None",
+    "unassigned": "Unassigned",
+    "detailTitle": "Issue Detail",
+    "detailSubtitle": "Issue ID: {{issueId}}",
+    "detailPlaceholder": "Issue detail view will expand with board metadata and audit history.",
+    "sections": {
+      "overview": "Overview",
+      "collaboration": "Assignment & collaboration",
+      "assignment": "Assignment settings",
+      "assignmentDescription": "Configure the assignee, trigger mode, and schedule before you run the issue.",
+      "triggerSetup": "Trigger setup",
+      "triggerSetupDescription": "Keep board context intact while adjusting schedule and execution guidance.",
+      "executionStatus": "Execution status",
+      "executionStatusDescription": "Trigger, retry, or release the assignment without leaving the board.",
+      "prompt": "Execution prompt",
+      "promptDescription": "Keep the prompt editable without mixing it into the execution controls.",
+      "executionPreview": "Execution preview",
+      "executionPreviewDescription": "Reserve space for impact preview, next run details, and retained sandbox handling.",
+      "dialogOverviewDescription": "Stay anchored to the board while you review issue details and assignment context.",
+      "executionDescription": "Run assignment actions without leaving the current board."
+    },
+    "fields": {
+      "boardName": "Board name",
+      "boardDescription": "Board description",
+      "createdAt": "Created",
+      "status": "Status",
+      "priority": "Priority",
+      "project": "Related project",
+      "agentPreset": "AI preset",
+      "triggerMode": "Trigger mode",
+      "schedule": "Schedule",
+      "prompt": "Prompt",
+      "assignmentStatus": "Assignment status",
+      "updatedAt": "Updated",
+      "session": "Execution session",
+      "container": "Sandbox container",
+      "lastTriggeredAt": "Last triggered",
+      "lastCompletedAt": "Last completed"
+    },
+    "context": {
+      "boardPill": "{{name}} board",
+      "eyebrow": "Board workspace",
+      "noBoardTitle": "Pick a board to start scanning work",
+      "noBoardDescription": "Switch between named boards here, then review workflow columns in the canvas below.",
+      "boardSelectLabel": "Current board",
+      "boardSelectPlaceholder": "Select a board"
+    },
+    "summary": {
+      "total": "Total issues",
+      "aiAssigned": "AI assigned",
+      "running": "Running now"
+    },
+    "toolbar": {
+      "title": "Board canvas",
+      "description": "{{count}} visible issues across the current workflow"
+    },
+    "columns": {
+      "count": "{{count}} issues",
+      "emptyTitle": "Nothing in this column",
+      "emptyDescription": "New issues will appear here as the workflow moves forward."
+    },
+    "statuses": {
+      "todo": "To do",
+      "in_progress": "In progress",
+      "done": "Done",
+      "canceled": "Canceled"
+    },
+    "priorities": {
+      "low": "Low",
+      "medium": "Medium",
+      "high": "High",
+      "urgent": "High"
+    },
+    "prioritySections": {
+      "high": "High",
+      "medium": "Medium",
+      "low": "Low"
+    },
+    "assignmentStatuses": {
+      "pending": "Pending",
+      "running": "Running",
+      "completed": "Completed",
+      "failed": "Failed",
+      "cancelled": "Cancelled"
+    },
+    "placeholders": {
+      "project": "Select a project",
+      "preset": "Select a preset",
+      "prompt": "Review or edit the generated agent prompt",
+      "description": "Add a description..."
+    },
+    "preview": {
+      "executionMode": "Execution mode",
+      "pendingImpact": "Impact preview will appear here after assignment hardening lands.",
+      "releaseHint": "Releasing clears the retained sandbox before the next execution."
+    },
+    "states": {
+      "loadErrorTitle": "Couldn't load issue data",
+      "loadErrorDescription": "Refresh and try again."
+    },
+    "triggerModes": {
+      "persistent_sandbox": "Persistent sandbox",
+      "scheduled_task": "Scheduled task"
+    },
+    "actions": {
+      "createBoard": "New board",
+      "boardSettings": "Board settings",
+      "createIssue": "New issue",
+      "copyIssueId": "Copy issue ID",
+      "viewRelatedProject": "View related project",
+      "copyShareLink": "Copy share link",
+      "saveOverview": "Save issue",
+      "markDone": "Mark done",
+      "reopen": "Reopen",
+      "showCompleted": "Show",
+      "hideCompleted": "Hide",
+      "backToList": "Back to list",
+      "saveAssignment": "Save assignment",
+      "trigger": "Trigger now",
+      "retry": "Retry",
+      "retryLoad": "Retry load",
+      "cancel": "Cancel assignment",
+      "release": "Release sandbox",
+      "openSession": "Open session",
+      "deleteBoard": "Delete board",
+      "deletingBoard": "Deleting board...",
+      "deleteIssue": "Delete issue",
+      "deletingIssue": "Deleting issue..."
+    },
+    "dialogs": {
+      "createBoardTitle": "Create board",
+      "createIssueTitle": "Create issue",
+      "boardSettingsTitle": "Board settings",
+      "boardSettingsDescription": "Rename this board, adjust its description, or remove it from the workspace.",
+      "deleteBoardTitle": "Delete this board?",
+      "deleteBoardDescription": "This permanently deletes the board and its {{count}} issues.",
+      "deleteIssueTitle": "Delete this issue?",
+      "deleteIssueDescription": "This removes the issue from the current board immediately."
+    },
+    "toasts": {
+      "loadFailed": "Failed to load issue data",
+      "boardCreated": "Board created",
+      "boardCreateFailed": "Failed to create board",
+      "boardUpdated": "Board updated",
+      "boardUpdateFailed": "Failed to update board",
+      "boardDeleted": "Board deleted",
+      "boardDeleteFailed": "Failed to delete board",
+      "issueCreated": "Issue created",
+      "issueCreateFailed": "Failed to create issue",
+      "issueUpdated": "Issue updated",
+      "issueUpdateFailed": "Failed to update issue",
+      "assignmentSaved": "Assignment saved",
+      "assignmentSaveFailed": "Failed to save assignment",
+      "triggered": "Execution triggered",
+      "retried": "Execution retried",
+      "cancelled": "Assignment cancelled",
+      "released": "Sandbox released",
+      "actionFailed": "Action failed",
+      "issueMoveFailed": "Failed to move issue",
+      "issueDeleted": "Issue deleted",
+      "issueDeleteFailed": "Failed to delete issue"
+    },
+    "lane": {
+      "pendingCount": "{{count}} pending issues",
+      "completedCount": "{{count}} completed",
+      "completedLabel": "completed",
+      "emptyTitle": "This board has no pending issues",
+      "emptyDescription": "Create a new issue from the header or reopen a completed one below.",
+      "emptyCompleted": "No completed issues yet."
+    }
   },
   "hero": {
     "title": "What can I do for you?",
@@ -302,7 +964,23 @@
     "userPromptTimelineEmpty": "(Empty prompt)",
     "expand": "Expand",
     "collapse": "Collapse",
+    "triggerContextTitle": "Channel trigger context",
+    "triggerContextFields": {
+      "source": "Source",
+      "triggerType": "Trigger type",
+      "server": "Server",
+      "channel": "Channel",
+      "message": "Message",
+      "thread": "Thread",
+      "agent": "Agent",
+      "handle": "Handle",
+      "messages": "Referenced messages",
+      "artifacts": "Referenced artifacts",
+      "tasks": "Referenced tasks",
+      "handoff": "Handoff key"
+    },
     "copyMessage": "Copy message",
+    "copyFailed": "Copy failed",
     "likeResponse": "Like response",
     "createBranch": "Create branch",
     "editMessageFailed": "Failed to edit message",
@@ -1716,6 +2394,7 @@
     "previous": "Previous",
     "next": "Next",
     "page": "Page {{page}}",
+    "pageOf": "{{current}}/{{total}}",
     "of": "/ {{total}}",
     "rowsPerPage": "Rows per page",
     "items": "items"
@@ -2210,7 +2889,8 @@
   },
   "chatInput": {
     "connect": "Connect",
-    "cancelTask": "Cancel task"
+    "cancelTask": "Cancel task",
+    "cancelFailed": "Failed to cancel task"
   },
   "chatContainer": {
     "loading": "Loading..."

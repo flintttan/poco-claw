@@ -5,6 +5,39 @@ description: Use structured planning, queued conversations, and controlled termi
 
 Poco supports workflow-oriented conversation control.
 
+## Plan Mode flow
+
+Plan Mode produces a plan before execution. This phase doesn't edit files by default, and it keeps planning separate from tool execution.
+
+```mermaid
+sequenceDiagram
+    participant User as User
+    participant Agent as Agent
+    participant UI as Poco UI
+    participant Executor as Executor
+
+    User->>UI: Enable Plan Mode and submit request
+    UI->>Agent: Ask for a plan
+    Agent-->>UI: Return steps, risks, and open questions
+    User->>UI: Approve, revise, or cancel
+    UI->>Executor: Start execution after approval
+    Executor-->>UI: Write execution events
+```
+
+## Queueing and termination
+
+During a long task, the user may send more input or stop the run. Poco needs to coordinate those inputs with the current execution state.
+
+```mermaid
+flowchart TD
+    A["Active run"] --> B{"New user input"}
+    B --> C["Queue next turn"]
+    A --> D{"User stops run"}
+    D --> E["Cancel current execution"]
+    C --> F["Run after current turn"]
+    E --> G["Persist stopped state"]
+```
+
 ## Highlights
 
 - **Plan Mode** for structured thinking before execution

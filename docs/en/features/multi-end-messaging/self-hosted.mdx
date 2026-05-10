@@ -5,6 +5,21 @@ description: Start Poco with Docker and run the full environment yourself.
 
 Poco can be started through Docker for personal or team-owned environments.
 
+## Self-hosted service layout
+
+A complete self-hosted deployment usually includes Frontend, Backend, Executor Manager, Executor, a database, and optional IM adapters. Backend remains the source of truth while the services communicate over the internal network.
+
+```mermaid
+flowchart TD
+    A["Browser"] --> B["Frontend"]
+    B --> C["Backend"]
+    C --> D["PostgreSQL"]
+    C --> E["Executor Manager"]
+    E --> F["Executor sandbox"]
+    F --> G["Workspace / local mounts"]
+    C --> H["IM adapters optional"]
+```
+
 ## Why it matters
 
 - One-click local startup experience

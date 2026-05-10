@@ -114,6 +114,21 @@ class BackendClient:
         result = data.get("data", {})
         return result if isinstance(result, dict) else {}
 
+    async def dispatch_due_agent_assignments(self, *, limit: int) -> dict[str, Any]:
+        response = await self._request(
+            "POST",
+            "/api/v1/internal/agent-assignments/dispatch-due",
+            json={"limit": limit},
+            headers={
+                "X-Internal-Token": self.settings.internal_api_token,
+                **self._trace_headers(),
+            },
+            retry_connect_errors=2,
+        )
+        data = response.json()
+        result = data.get("data", {})
+        return result if isinstance(result, dict) else {}
+
     async def claim_run(
         self,
         worker_id: str,
@@ -577,3 +592,241 @@ class BackendClient:
             data = response.json()
             result = data.get("data")
             return result if isinstance(result, dict) else {}
+
+    async def create_agent_channel_task(
+        self,
+        session_id: str,
+        payload: dict[str, Any],
+    ) -> Any:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{self.base_url}/api/v1/internal/server-channel-tasks/create",
+                params={"session_id": session_id},
+                json=payload,
+                headers={
+                    "X-Internal-Token": self.settings.internal_api_token,
+                    **self._trace_headers(),
+                },
+            )
+            response.raise_for_status()
+            return response.json().get("data")
+
+    async def list_agent_channel_tasks(
+        self,
+        session_id: str,
+        payload: dict[str, Any],
+    ) -> Any:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{self.base_url}/api/v1/internal/server-channel-tasks/list",
+                params={"session_id": session_id},
+                json=payload,
+                headers={
+                    "X-Internal-Token": self.settings.internal_api_token,
+                    **self._trace_headers(),
+                },
+            )
+            response.raise_for_status()
+            return response.json().get("data")
+
+    async def read_agent_channel_task(
+        self,
+        session_id: str,
+        payload: dict[str, Any],
+    ) -> Any:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{self.base_url}/api/v1/internal/server-channel-tasks/read",
+                params={"session_id": session_id},
+                json=payload,
+                headers={
+                    "X-Internal-Token": self.settings.internal_api_token,
+                    **self._trace_headers(),
+                },
+            )
+            response.raise_for_status()
+            return response.json().get("data")
+
+    async def list_agent_channel_artifacts(self, session_id: str) -> Any:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{self.base_url}/api/v1/internal/channel-artifacts/list",
+                params={"session_id": session_id},
+                headers={
+                    "X-Internal-Token": self.settings.internal_api_token,
+                    **self._trace_headers(),
+                },
+            )
+            response.raise_for_status()
+            return response.json().get("data")
+
+    async def read_agent_channel_artifact(
+        self,
+        session_id: str,
+        payload: dict[str, Any],
+    ) -> Any:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{self.base_url}/api/v1/internal/channel-artifacts/read",
+                params={"session_id": session_id},
+                json=payload,
+                headers={
+                    "X-Internal-Token": self.settings.internal_api_token,
+                    **self._trace_headers(),
+                },
+            )
+            response.raise_for_status()
+            return response.json().get("data")
+
+    async def search_agent_channel_artifacts(
+        self,
+        session_id: str,
+        payload: dict[str, Any],
+    ) -> Any:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{self.base_url}/api/v1/internal/channel-artifacts/search",
+                params={"session_id": session_id},
+                json=payload,
+                headers={
+                    "X-Internal-Token": self.settings.internal_api_token,
+                    **self._trace_headers(),
+                },
+            )
+            response.raise_for_status()
+            return response.json().get("data")
+
+    async def update_agent_channel_task_status(
+        self,
+        session_id: str,
+        payload: dict[str, Any],
+    ) -> Any:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{self.base_url}/api/v1/internal/server-channel-tasks/status",
+                params={"session_id": session_id},
+                json=payload,
+                headers={
+                    "X-Internal-Token": self.settings.internal_api_token,
+                    **self._trace_headers(),
+                },
+            )
+            response.raise_for_status()
+            return response.json().get("data")
+
+    async def claim_agent_channel_task(
+        self,
+        session_id: str,
+        payload: dict[str, Any],
+    ) -> Any:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{self.base_url}/api/v1/internal/server-channel-tasks/claim",
+                params={"session_id": session_id},
+                json=payload,
+                headers={
+                    "X-Internal-Token": self.settings.internal_api_token,
+                    **self._trace_headers(),
+                },
+            )
+            response.raise_for_status()
+            return response.json().get("data")
+
+    async def comment_agent_channel_task(
+        self,
+        session_id: str,
+        payload: dict[str, Any],
+    ) -> Any:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{self.base_url}/api/v1/internal/server-channel-tasks/comment",
+                params={"session_id": session_id},
+                json=payload,
+                headers={
+                    "X-Internal-Token": self.settings.internal_api_token,
+                    **self._trace_headers(),
+                },
+            )
+            response.raise_for_status()
+            return response.json().get("data")
+
+    async def read_agent_channel_messages(
+        self,
+        session_id: str,
+        payload: dict[str, Any],
+    ) -> Any:
+        response = await self._request(
+            "POST",
+            "/api/v1/internal/channel-runtime/messages/read",
+            params={"session_id": session_id},
+            json=payload,
+            headers={
+                "X-Internal-Token": self.settings.internal_api_token,
+                **self._trace_headers(),
+            },
+        )
+        return response.json().get("data")
+
+    async def list_agent_channel_agents(self, session_id: str) -> Any:
+        response = await self._request(
+            "POST",
+            "/api/v1/internal/channel-runtime/agents/list",
+            params={"session_id": session_id},
+            json={},
+            headers={
+                "X-Internal-Token": self.settings.internal_api_token,
+                **self._trace_headers(),
+            },
+        )
+        return response.json().get("data")
+
+    async def request_agent_channel_collaboration(
+        self,
+        session_id: str,
+        payload: dict[str, Any],
+    ) -> Any:
+        response = await self._request(
+            "POST",
+            "/api/v1/internal/channel-runtime/collaboration/request",
+            params={"session_id": session_id},
+            json=payload,
+            headers={
+                "X-Internal-Token": self.settings.internal_api_token,
+                **self._trace_headers(),
+            },
+        )
+        return response.json().get("data")
+
+    async def add_agent_channel_message_reaction(
+        self,
+        session_id: str,
+        payload: dict[str, Any],
+    ) -> Any:
+        response = await self._request(
+            "POST",
+            "/api/v1/internal/channel-runtime/reactions/add",
+            params={"session_id": session_id},
+            json=payload,
+            headers={
+                "X-Internal-Token": self.settings.internal_api_token,
+                **self._trace_headers(),
+            },
+        )
+        return response.json().get("data")
+
+    async def remove_agent_channel_message_reaction(
+        self,
+        session_id: str,
+        payload: dict[str, Any],
+    ) -> Any:
+        response = await self._request(
+            "POST",
+            "/api/v1/internal/channel-runtime/reactions/remove",
+            params={"session_id": session_id},
+            json=payload,
+            headers={
+                "X-Internal-Token": self.settings.internal_api_token,
+                **self._trace_headers(),
+            },
+        )
+        return response.json().get("data")

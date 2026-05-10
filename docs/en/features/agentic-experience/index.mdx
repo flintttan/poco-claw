@@ -5,6 +5,29 @@ description: Bring planning, tools, browsing, and long-running execution into on
 
 Poco is designed to feel like a fully capable agent runtime instead of a thin wrapper around a model.
 
+## Workflow overview
+
+An agent run inherits project defaults and Preset configuration before it enters sandbox execution. During execution, the agent can use MCP, Skills, browser, and GitHub tools. Runtime events flow back to the execution drawer and playback view.
+
+```mermaid
+flowchart TD
+    A["User request"] --> B["Project defaults"]
+    B --> C["Preset"]
+    C --> D["Runtime config"]
+    D --> E["Executor sandbox"]
+    E --> F["Claude Code style interaction"]
+    E --> G["MCP / Skills"]
+    E --> H["Browser"]
+    E --> I["GitHub repository"]
+    E --> J["Background job"]
+    F --> K["Execution events"]
+    G --> K
+    H --> K
+    I --> K
+    J --> K
+    K --> L["Playback / artifacts / channel updates"]
+```
+
 ## Capabilities
 
 - [Claude Code–style native workflow](./claude-code)

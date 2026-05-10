@@ -1,24 +1,30 @@
 from fastapi import APIRouter
 
 from app.api.v1 import (
+    activity_logs,
     admin,
     auth,
     attachments,
     audio,
     callback,
     capability_recommendations,
+    server_channel_artifacts,
     claude_md,
     env_vars,
     filesystem,
     models,
     internal_claude_md,
     internal_env_vars,
+    internal_agent_assignments,
+    internal_channel_artifacts,
+    internal_channel_runtime,
     internal_memories,
     internal_skills,
     im,
     internal_plugin_config,
     internal_slash_commands,
     internal_mcp_config,
+    internal_server_channel_tasks,
     internal_scheduled_tasks,
     internal_sessions,
     internal_skill_config,
@@ -37,6 +43,13 @@ from app.api.v1 import (
     runs,
     schedules,
     search,
+    server_agents,
+    server_channel_messages,
+    server_channel_tasks,
+    server_channels,
+    server_invites,
+    server_members,
+    servers,
     scheduled_tasks,
     session_queue,
     sessions,
@@ -51,11 +64,17 @@ from app.api.v1 import (
     usage,
     user_input_requests,
     user_mcp_installs,
+    workspace_boards,
+    workspace_invites,
+    workspace_issues,
+    workspace_members,
+    workspaces,
 )
 from app.core.settings import get_settings
 from app.schemas.response import Response
 
 api_v1_router = APIRouter()
+api_v1_router.include_router(activity_logs.router)
 api_v1_router.include_router(auth.router)
 api_v1_router.include_router(admin.router)
 api_v1_router.include_router(sessions.router)
@@ -78,12 +97,27 @@ api_v1_router.include_router(filesystem.router)
 api_v1_router.include_router(claude_md.router)
 api_v1_router.include_router(models.router)
 api_v1_router.include_router(search.router)
+api_v1_router.include_router(servers.router)
+api_v1_router.include_router(server_agents.router)
+api_v1_router.include_router(server_agents.channel_router)
+api_v1_router.include_router(server_members.router)
+api_v1_router.include_router(server_invites.router)
+api_v1_router.include_router(server_invites.accept_router)
+api_v1_router.include_router(server_channels.router)
+api_v1_router.include_router(server_channels.dm_router)
+api_v1_router.include_router(server_channel_artifacts.router)
+api_v1_router.include_router(server_channel_messages.router)
+api_v1_router.include_router(server_channel_tasks.router)
 api_v1_router.include_router(im.router)
 api_v1_router.include_router(internal_claude_md.router)
 api_v1_router.include_router(internal_env_vars.router)
+api_v1_router.include_router(internal_agent_assignments.router)
+api_v1_router.include_router(internal_channel_artifacts.router)
+api_v1_router.include_router(internal_channel_runtime.router)
 api_v1_router.include_router(internal_memories.router)
 api_v1_router.include_router(internal_skills.router)
 api_v1_router.include_router(internal_mcp_config.router)
+api_v1_router.include_router(internal_server_channel_tasks.router)
 api_v1_router.include_router(internal_skill_config.router)
 api_v1_router.include_router(internal_scheduled_tasks.router)
 api_v1_router.include_router(internal_sessions.router)
@@ -106,6 +140,13 @@ api_v1_router.include_router(slash_commands.router)
 api_v1_router.include_router(subagents.router)
 api_v1_router.include_router(user_input_requests.router)
 api_v1_router.include_router(scheduled_tasks.router)
+api_v1_router.include_router(workspaces.router)
+api_v1_router.include_router(workspace_boards.router)
+api_v1_router.include_router(workspace_issues.router)
+api_v1_router.include_router(workspace_issues.detail_router)
+api_v1_router.include_router(workspace_members.router)
+api_v1_router.include_router(workspace_invites.router)
+api_v1_router.include_router(workspace_invites.accept_router)
 
 
 @api_v1_router.get("/")

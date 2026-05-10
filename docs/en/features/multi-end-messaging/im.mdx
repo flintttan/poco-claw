@@ -5,6 +5,26 @@ description: Deliver notifications and events through DingTalk and Telegram.
 
 Poco supports messaging-driven interaction through DingTalk and Telegram.
 
+## IM event flow
+
+The IM adapter subscribes to backend events and pushes important state changes to external chat tools. Lightweight actions from IM are validated through Backend before they affect the unified state model.
+
+```mermaid
+sequenceDiagram
+    participant Backend as Backend
+    participant Adapter as IM adapter
+    participant IM as DingTalk / Telegram
+    participant User as User
+
+    Backend->>Adapter: Run status / task event
+    Adapter->>IM: Push progress notification
+    User->>IM: Reply or trigger lightweight action
+    IM->>Adapter: Webhook event
+    Adapter->>Backend: Validate and submit action
+    Backend-->>Adapter: Return result
+    Adapter-->>IM: Send confirmation
+```
+
 ## What it enables
 
 - Push notifications for task progress

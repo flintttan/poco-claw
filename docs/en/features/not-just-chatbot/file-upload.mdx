@@ -5,6 +5,25 @@ description: Bring files into the workflow for richer agent input and processing
 
 Poco supports file-based input so agents can work from more than plain text prompts.
 
+## Upload flow
+
+Uploaded files are registered as session or project context, then included in the run snapshot. The agent can read those materials during execution and produce new artifacts as output.
+
+```mermaid
+sequenceDiagram
+    participant User as User
+    participant Frontend as Frontend
+    participant Backend as Backend
+    participant Executor as Executor
+
+    User->>Frontend: Upload reference files
+    Frontend->>Backend: Store file metadata and content reference
+    Backend->>Backend: Attach files to project or session
+    Backend->>Executor: Inject file context in run snapshot
+    Executor->>Executor: Read files and execute task
+    Executor-->>Backend: Return output and artifacts
+```
+
 ## Typical uses
 
 - Upload reference files as task context

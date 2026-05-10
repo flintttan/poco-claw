@@ -37,5 +37,11 @@ class UserRepository:
         return session_db.query(User).filter(User.primary_email == email).first()
 
     @staticmethod
+    def list_by_ids(session_db: Session, user_ids: list[str]) -> list[User]:
+        if not user_ids:
+            return []
+        return session_db.query(User).filter(User.id.in_(user_ids)).all()
+
+    @staticmethod
     def list_all(session_db: Session) -> list[User]:
         return session_db.query(User).order_by(User.created_at.desc()).all()

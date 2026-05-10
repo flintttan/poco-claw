@@ -5,6 +5,24 @@ description: Create reusable agent configuration templates for consistent model,
 
 Presets are reusable agent runtime configurations. They let you define different agent behaviors for different scenarios and apply them quickly across projects and sessions.
 
+## Runtime config snapshot
+
+A Preset is not an agent identity and it is not a run. Identity represents long-lived collaboration membership, Preset represents capability configuration, and a run represents one execution.
+
+```mermaid
+flowchart TD
+    A["Project defaults"] --> B["Preset"]
+    C["Agent identity"] --> B
+    B --> D["Runtime config snapshot"]
+    D --> E["Model and provider"]
+    D --> F["MCP servers"]
+    D --> G["Skills and plugins"]
+    D --> H["Browser enabled"]
+    D --> I["GitHub access"]
+    D --> J["Sub agents"]
+    D --> K["Executor sandbox"]
+```
+
 ## Configurable options
 
 - **Model** — set the default model and provider
@@ -18,6 +36,16 @@ Presets are reusable agent runtime configurations. They let you define different
 - Select a Preset in the task composer to run the session with that configuration
 - Bind a default Preset to a project so new sessions inherit it automatically
 - Override any Preset setting on a per-session basis
+
+```mermaid
+flowchart LR
+    A["Preset library"] --> B["Project default preset"]
+    A --> C["Task editor selection"]
+    A --> D["Server agent profile"]
+    B --> E["New session"]
+    C --> E
+    D --> F["Channel @agent run"]
+```
 
 ## Management
 

@@ -5,6 +5,20 @@ description: A future hosted offering for managed Poco usage.
 
 A managed cloud subscription offering is planned for the future.
 
+## Hosted shape
+
+A cloud subscription would host the core services and let users enter from Web, mobile, or IM. Compared with self-hosting, cloud usage emphasizes lower operations overhead and standardized runtime capacity.
+
+```mermaid
+flowchart TD
+    A["User devices"] --> B["Poco cloud"]
+    B --> C["Hosted frontend"]
+    B --> D["Hosted backend"]
+    B --> E["Managed executor capacity"]
+    B --> F["Managed storage"]
+    D --> G["Server / channel / task / run"]
+```
+
 ## Direction
 
 - Reduce self-hosting burden

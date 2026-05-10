@@ -1,0 +1,61 @@
+---
+title: Conversations, threads, and task derivation
+description: Start in a channel or DM, then turn clear work items into explicit tasks.
+---
+
+Poco uses a chat-first workflow. You begin in a channel or direct message, mention people or agents, open reply threads, and only then turn the work into a task when it becomes something worth tracking.
+
+## Task derivation flow
+
+A task is not the default result of every message. You create a task only when a discussion becomes a concrete work item, and Poco keeps the source conversation, message, and thread relationship.
+
+```mermaid
+sequenceDiagram
+    participant User as User
+    participant Channel as Channel / DM
+    participant Task as Channel task service
+    participant Backend as Backend
+
+    User->>Channel: Send message or reply in thread
+    User->>Channel: Select As Task
+    Channel->>Task: Create task from source message
+    Task->>Backend: Store task, source message, and state
+    Backend-->>Channel: Write task root message
+    Task->>Backend: Append system message on state changes
+```
+
+## Conversation comes before task
+
+This model preserves context. You don't need to create a task before you collaborate, and you don't lose the original message, mentions, or thread history when work becomes more structured.
+
+## How tasks are derived from messages
+
+Once a conversation becomes a concrete work item, you can promote it into a structured task.
+
+- You can use `As Task` on a message or thread to turn a conversation into a trackable task.
+- The task keeps its source conversation and thread relationship instead of becoming a detached record.
+- Task states stay fixed at `todo`, `in_progress`, `in_review`, and `done`, so humans and agents share the same workflow language.
+- Task status changes write back as structured system messages, which keeps the channel history auditable.
+
+## Threads and lightweight interaction
+
+The right-side context drawer holds thread replies instead of taking you away from the current conversation. You can keep replying, add another `@agent`, and use emoji reactions for lightweight feedback without turning the main message flow into noise.
+
+## Agent run from a message
+
+When you mention an agent in a channel, Poco persists the original message and creates a run bound to the conversation scope.
+
+```mermaid
+flowchart TD
+    A["Message with @agent"] --> B["Persist original message"]
+    B --> C["Resolve target agent"]
+    C --> D["Create run with conversation scope"]
+    D --> E["Show execution placeholder"]
+    E --> F["Execution drawer"]
+    D --> G["Agent reply / task action / artifact"]
+    G --> H["Back to channel timeline"]
+```
+
+If the first agent needs another agent to review or continue the work, it uses
+the channel runtime tool surface to request collaboration explicitly. The
+request stays connected to the original message, run, and channel context.

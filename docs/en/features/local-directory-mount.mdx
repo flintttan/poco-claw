@@ -5,6 +5,25 @@ description: Mount local host directories into the executor sandbox so the agent
 
 Mount local directories from your host machine into the executor sandbox, allowing the agent to read from and write to your real files.
 
+## Mount flow
+
+The user selects a local directory in the task composer or chat panel. Backend stores the mount config, Executor Manager converts it into a container bind mount, and Executor accesses it under `/workspace/.poco-local/`.
+
+```mermaid
+sequenceDiagram
+    participant User as User
+    participant UI as Frontend
+    participant Backend as Backend
+    participant Manager as Executor Manager
+    participant Executor as Executor sandbox
+
+    User->>UI: Select host directory and permissions
+    UI->>Backend: Store local mount config
+    Backend->>Manager: Include mount spec in run snapshot
+    Manager->>Executor: Create execution environment with bind mount
+    Executor->>Executor: Access files under /workspace/.poco-local/
+```
+
 ## When to use
 
 - When you want the agent to work directly with your project files instead of sandbox copies
@@ -23,14 +42,15 @@ Mount local directories from your host machine into the executor sandbox, allowi
 
 ## Architecture
 
-```
-Host machine                     Container
-┌──────────────┐                ┌──────────────────────────┐
-│ /home/user/  │  bind mount    │ /workspace/              │
-│   my-project/ │ ────────────► │   .poco-local/          │
-│              │                │     my-project/          │
-│ /tmp/        │ ────────────► │   .poco-local/tmp/       │
-└──────────────┘                └──────────────────────────┘
+Local mounts are not shared files or agent private state. They are an explicit host permission boundary for the current run.
+
+```mermaid
+flowchart TD
+    A["Host directory"] -->|"bind mount"| B["Executor sandbox"]
+    B --> C["/workspace/.poco-local/<mount-id>"]
+    B --> D["Session workspace"]
+    D --> E["Artifacts if published"]
+    C -. "not automatically published" .-> F["Not shared by default"]
 ```
 
 - Mounted directories appear under `/workspace/.poco-local/<mount-id>/` inside the container

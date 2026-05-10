@@ -1,10 +1,10 @@
 {
   "title": "Development",
   "pages": [
-    "!index",
     "commands",
     "tech-stack",
     "repository-structure",
-    "conventions"
+    "conventions",
+    "spec-driven-development"
   ]
 }

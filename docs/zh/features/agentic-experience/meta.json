@@ -1,7 +1,6 @@
 {
   "title": "Agentic 体验",
   "pages": [
-    "!index",
     "claude-code",
     "preset",
     "mcp-skills",

@@ -5,6 +5,36 @@ description: Replay commands, browser actions, and tool invocation history.
 
 The playback interface helps you understand what the agent actually did.
 
+## Event collection flow
+
+Executor emits structured events while the agent works. Backend persists these events, and the UI renders them as a replayable timeline.
+
+```mermaid
+sequenceDiagram
+    participant Executor as Executor
+    participant Backend as Backend
+    participant UI as Playback UI
+
+    Executor->>Backend: thinking / tool call / command / browser event
+    Backend->>Backend: Persist event order and metadata
+    UI->>Backend: Request execution timeline
+    Backend-->>UI: Return ordered events
+    UI->>UI: Render replay and current state
+```
+
+## From events to trust
+
+Playback turns low-level runtime records into user-facing evidence.
+
+```mermaid
+flowchart LR
+    A["Execution events"] --> B["Timeline replay"]
+    A --> C["Derived current state"]
+    B --> D["Audit and debugging"]
+    C --> E["Status badge / progress"]
+    B --> F["Trust and review"]
+```
+
 ## What you can review
 
 - Command input and output

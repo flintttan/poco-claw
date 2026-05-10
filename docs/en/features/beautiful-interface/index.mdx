@@ -5,6 +5,24 @@ description: Render outputs, inspect execution playback, and adapt the UI to dif
 
 Poco focuses on both productivity and readability.
 
+## Interface layers
+
+Poco separates collaboration messages, execution details, and final outputs. The main timeline stays readable, the execution drawer carries runtime details, and the artifact viewer renders results.
+
+```mermaid
+flowchart TD
+    A["Channel or session"] --> B["Main message timeline"]
+    A --> C["Execution drawer"]
+    A --> D["Artifacts view"]
+    C --> E["Thinking"]
+    C --> F["Tool calls"]
+    C --> G["Todo progress"]
+    C --> H["Command output"]
+    D --> I["Markdown / HTML / PDF"]
+    D --> J["Images / videos"]
+    D --> K["Drawio / Excalidraw / Xmind"]
+```
+
 ## Included views
 
 - [Artifacts view](./artifacts)

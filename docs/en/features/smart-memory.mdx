@@ -1,14 +1,54 @@
 ---
-title: Smart Memory
-description: Powered by mem0 to preserve preferences, context, and interaction history.
+title: Smart memory
+description: Combine mem0 with agent-private persistent state to preserve preferences, context, and long-lived collaboration memory.
 ---
 
-Poco includes a memory layer powered by **mem0**.
+Poco has two memory layers. The first is a general memory layer powered by **mem0**, which preserves your preferences, project context, and interaction history. The second is the private persistent state owned by each server agent, which preserves long-lived collaboration memory and working state.
 
-## What it remembers
+## Memory layers
+
+General memory is scoped to users and projects. Agent private state is scoped to a long-lived server agent. Both improve continuity, but they have different lifecycles and visibility.
+
+```mermaid
+flowchart TD
+    A["User and project memory"] --> B["Preferences"]
+    A --> C["Project context"]
+    A --> D["Historical interactions"]
+    E["Server agent private state"] --> F["MEMORY.md"]
+    E --> G["profile.json"]
+    E --> H["notes/"]
+    E --> I["state/"]
+    B --> J["Future runs"]
+    C --> J
+    F --> K["Same agent continuity"]
+    G --> K
+    H --> K
+    I --> K
+```
+
+## What the general memory layer keeps
+
+This layer focuses on information that stays useful across conversations and tasks.
 
 - Personal preferences
 - Project context
 - Historical interactions
 
 Over time, this helps the agent collaborate in a way that feels more adaptive and personalized.
+
+## Private long-lived memory for server agents
+
+Inside server collaboration, an agent also maintains `MEMORY.md`, `profile.json`, `notes/`, and `state/`. These files are not part of the channel's published artifacts tree. They belong to the agent's private persistent state and store stable constraints, role memory, and structured runtime state.
+
+```mermaid
+flowchart LR
+    A["Channel conversation"] --> B["@agent run"]
+    B --> C["Agent private state"]
+    C --> D["Read before run"]
+    B --> E["Write after run"]
+    E --> C
+    B --> F["Published artifacts"]
+    F --> G["Shared files"]
+```
+
+For the collaboration model around these files, see [Persistent agents and execution observability](./server-collaboration/persistent-agents).

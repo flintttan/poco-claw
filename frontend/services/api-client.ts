@@ -19,6 +19,8 @@ export const API_ENDPOINTS = {
   sessionsWithTitles: "/sessions/list-with-titles",
   session: (sessionId: string) => `/sessions/${sessionId}`,
   sessionCancel: (sessionId: string) => `/sessions/${sessionId}/cancel`,
+  sessionCancelCurrentRun: (sessionId: string) =>
+    `/sessions/${sessionId}/cancel-current-run`,
   sessionBranch: (sessionId: string) => `/sessions/${sessionId}/branch`,
   sessionRegenerate: (sessionId: string) => `/sessions/${sessionId}/regenerate`,
   sessionEditMessage: (sessionId: string) =>
@@ -194,6 +196,76 @@ export const API_ENDPOINTS = {
   projectFiles: (projectId: string) => `/projects/${projectId}/files`,
   projectFile: (projectId: string, fileId: number) =>
     `/projects/${projectId}/files/${fileId}`,
+
+  // Servers
+  servers: "/servers",
+  server: (serverId: string) => `/servers/${serverId}`,
+  serverChannels: (serverId: string) => `/servers/${serverId}/channels`,
+  serverChannel: (serverId: string, channelId: string) =>
+    `/servers/${serverId}/channels/${channelId}`,
+  serverChannelTasks: (serverId: string, channelId: string) =>
+    `/servers/${serverId}/channels/${channelId}/tasks`,
+  serverChannelTask: (serverId: string, channelId: string, taskId: string) =>
+    `/servers/${serverId}/channels/${channelId}/tasks/${taskId}`,
+  serverChannelTaskStatus: (
+    serverId: string,
+    channelId: string,
+    taskId: string,
+  ) => `/servers/${serverId}/channels/${channelId}/tasks/${taskId}/status`,
+  serverChannelTaskClaim: (
+    serverId: string,
+    channelId: string,
+    taskId: string,
+  ) => `/servers/${serverId}/channels/${channelId}/tasks/${taskId}/claim`,
+  serverChannelTaskUnclaim: (
+    serverId: string,
+    channelId: string,
+    taskId: string,
+  ) => `/servers/${serverId}/channels/${channelId}/tasks/${taskId}/unclaim`,
+  serverChannelThread: (
+    serverId: string,
+    channelId: string,
+    threadRootMessageId: string,
+  ) =>
+    `/servers/${serverId}/channels/${channelId}/threads/${threadRootMessageId}`,
+
+  // Workspaces
+  workspaces: "/workspaces",
+  workspace: (workspaceId: string) => `/workspaces/${workspaceId}`,
+  workspaceMembers: (workspaceId: string) =>
+    `/workspaces/${workspaceId}/members`,
+  workspaceMember: (workspaceId: string, membershipId: number) =>
+    `/workspaces/${workspaceId}/members/${membershipId}`,
+  workspaceMemberRole: (workspaceId: string, membershipId: number) =>
+    `/workspaces/${workspaceId}/members/${membershipId}/role`,
+  workspaceLeave: (workspaceId: string) =>
+    `/workspaces/${workspaceId}/members/leave`,
+  workspaceInvites: (workspaceId: string) =>
+    `/workspaces/${workspaceId}/invites`,
+  workspaceInviteRevoke: (workspaceId: string, inviteId: string) =>
+    `/workspaces/${workspaceId}/invites/${inviteId}/revoke`,
+  workspaceActivity: (workspaceId: string) =>
+    `/workspaces/${workspaceId}/activity`,
+  workspaceBoards: (workspaceId: string) => `/workspaces/${workspaceId}/boards`,
+  workspaceBoard: (workspaceId: string, boardId: string) =>
+    `/workspaces/${workspaceId}/boards/${boardId}`,
+  workspaceIssues: (boardId: string) => `/workspace-boards/${boardId}/issues`,
+  workspaceIssue: (boardId: string, issueId: string) =>
+    `/workspace-boards/${boardId}/issues/${issueId}`,
+  workspaceIssueDetail: (issueId: string) => `/workspace-issues/${issueId}`,
+  workspaceIssueMove: (issueId: string) => `/workspace-issues/${issueId}/move`,
+  workspaceIssueAgentAssignment: (issueId: string) =>
+    `/workspace-issues/${issueId}/agent-assignment`,
+  workspaceIssueAgentTrigger: (issueId: string) =>
+    `/workspace-issues/${issueId}/agent-assignment/trigger`,
+  workspaceIssueAgentRetry: (issueId: string) =>
+    `/workspace-issues/${issueId}/agent-assignment/retry`,
+  workspaceIssueAgentCancel: (issueId: string) =>
+    `/workspace-issues/${issueId}/agent-assignment/cancel`,
+  workspaceIssueAgentRelease: (issueId: string) =>
+    `/workspace-issues/${issueId}/agent-assignment/release`,
+  presetCopy: (presetId: number) => `/presets/${presetId}/copy`,
+  projectCopy: (projectId: string) => `/projects/${projectId}/copy`,
 
   // Auth
   authConfig: "/auth/config",

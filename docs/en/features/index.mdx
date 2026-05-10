@@ -1,12 +1,81 @@
 ---
-title: Feature Overview
-description: Explore Poco capabilities from secure execution to memory and multi-end interaction.
+title: Feature overview
+description: Explore Poco capabilities from server collaboration to secure execution, agentic workflows, and memory.
 ---
 
-Poco is built to be more than a chat interface. It combines secure execution, agentic workflows, rich UI, cross-channel interaction, and persistent memory into one developer product.
+Poco is built to be more than a chat interface. It combines team collaboration, secure execution, agentic workflows, rich UI, cross-channel interaction, and persistent memory into one developer product.
+
+## How a task moves through Poco
+
+You can think of Poco as a collaboration source of truth plus a sandboxed execution plane. People start work from a server, channel, DM, or task page. The Backend stores collaboration facts and runtime state, Executor Manager schedules runnable work, and Executor runs the agent in an isolated sandbox before writing progress, tool events, and artifacts back.
+
+```mermaid
+sequenceDiagram
+    participant User as User
+    participant Frontend as Frontend
+    participant Backend as Backend / fact source
+    participant Manager as Executor Manager
+    participant Executor as Executor / Sandbox
+
+    User->>Frontend: Start from channel, DM, or task page
+    Frontend->>Backend: Create message, session, or run
+    Backend->>Backend: Persist context, permissions, and config snapshot
+    Manager->>Backend: Claim runnable work
+    Backend-->>Manager: Return run snapshot
+    Manager->>Executor: Dispatch params and callback contract
+    Executor->>Executor: Use model, tools, filesystem, and browser
+    Executor-->>Backend: Write messages, tool events, status, and artifacts
+    Frontend->>Backend: Poll or subscribe to execution state
+    Backend-->>Frontend: Show channel messages, drawer state, and previews
+```
+
+## Capability layers
+
+Poco capabilities are layered around one agent workflow. Collaboration lives at the top, reusable agent capabilities and context governance sit in the middle, and secure execution, mounts, memory, and multi-end messaging form the runtime foundation.
+
+```mermaid
+flowchart TD
+    A["Server collaboration space"] --> B["Channel / DM / Thread"]
+    B --> C["Message"]
+    C --> D["Channel task"]
+    C --> E["@agent run"]
+    E --> F["Preset capability package"]
+    F --> G["MCP / Skills / Browser / GitHub"]
+    E --> H["Executor sandbox"]
+    H --> I["Tool events and playback"]
+    H --> J["Published artifacts"]
+    J --> K["Shared files and artifact preview"]
+    E --> L["Agent private state"]
+    L --> M["Smart memory"]
+    B --> N["IM / Mobile / Web"]
+```
+
+The diagram highlights three important boundaries.
+
+- **Collaboration boundary**: servers, channels, DMs, threads, and tasks organize the shared human-agent context.
+- **Execution boundary**: an agent run enters the sandbox before it can use shell, browser, MCP, Skills, and repository tools.
+- **State boundary**: published artifacts become shared files, while agent-private state and long-term memory don't automatically become channel files.
+
+## Agentic runtime package
+
+Presets define reusable execution capabilities. They bundle the model, provider, tools, browser access, GitHub context, sub-agents, and background behavior that a run can use.
+
+```mermaid
+flowchart LR
+    A["Preset"] --> B["Model and provider"]
+    A --> C["MCP servers"]
+    A --> D["Skills and plugins"]
+    A --> E["Browser"]
+    A --> F["GitHub repository"]
+    A --> G["Sub agents"]
+    A --> H["Background jobs"]
+```
 
 ## Feature map
 
+These sections map the current product around collaboration flow and core runtime capabilities.
+
+- [Server collaboration and channel workflows](./server-collaboration)
 - [Secure Sandbox](./secure-sandbox)
 - [Not Just a ChatBot](./not-just-chatbot)
 - [Beautiful and Efficient Interface](./beautiful-interface)

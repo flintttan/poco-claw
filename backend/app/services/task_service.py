@@ -1,4 +1,6 @@
 from datetime import datetime, timezone
+import logging
+import uuid
 from zoneinfo import ZoneInfo
 
 from sqlalchemy.orm import Session
@@ -32,8 +34,10 @@ from app.services.model_config_service import (
     get_allowed_model_ids,
     infer_provider_id,
 )
+from app.services.agent_runtime_service import AgentRuntimeService
 from app.services.session_queue_service import SessionQueueService
 
+logger = logging.getLogger(__name__)
 env_var_service = EnvVarService()
 
 
@@ -364,8 +368,8 @@ class TaskService:
         project_id = request.project_id
         project = None
         if project_id is not None:
-            project = ProjectRepository.get_by_id(db, project_id)
-            if not project or project.user_id != user_id:
+            project = ProjectRepository.get_visible_by_id(db, project_id, user_id)
+            if not project:
                 raise AppException(
                     error_code=ErrorCode.PROJECT_NOT_FOUND,
                     message=f"Project not found: {project_id}",
@@ -437,6 +441,12 @@ class TaskService:
             )
             db.flush()
 
+        self._reserve_agent_runtime_if_needed(
+            db,
+            merged_config,
+            db_session.id,
+        )
+
         run_config_snapshot = dict(merged_config or {})
         merged_input_files = self._merge_input_files(
             self._build_project_input_files(db, project),
@@ -491,6 +501,15 @@ class TaskService:
         db.commit()
         db.refresh(db_session)
         db.refresh(db_run)
+        logger.info(
+            "timing",
+            extra={
+                "step": "backend_run_materialized",
+                "session_id": str(db_session.id),
+                "run_id": str(db_run.id),
+                "schedule_mode": schedule_mode,
+            },
+        )
 
         return TaskEnqueueResponse(
             session_id=db_session.id,
@@ -499,6 +518,28 @@ class TaskService:
             status=db_run.status,
             queued_query_count=session_queue_service.count_active_items(
                 db, db_session.id
+            ),
+        )
+
+    @staticmethod
+    def _reserve_agent_runtime_if_needed(
+        db: Session,
+        merged_config: dict | None,
+        session_id,
+    ) -> None:
+        if not isinstance(merged_config, dict):
+            return
+        agent_identity_id = merged_config.get("agent_identity_id")
+        runtime_mode = (merged_config.get("agent_runtime_mode") or "").strip().lower()
+        if not agent_identity_id or runtime_mode != "persistent":
+            return
+        channel_task_id = merged_config.get("channel_task_id")
+        AgentRuntimeService().reserve_persistent_runtime(
+            db,
+            agent_identity_id=uuid.UUID(str(agent_identity_id)),
+            session_id=session_id,
+            channel_task_id=(
+                uuid.UUID(str(channel_task_id)) if channel_task_id else None
             ),
         )
 
@@ -557,7 +598,10 @@ class TaskService:
         if task_config is not None:
             # Only merge fields explicitly provided by the caller to avoid
             # overriding existing session config with schema defaults.
-            request_config = task_config.model_dump(exclude_unset=True)
+            request_config = task_config.model_dump(
+                mode="json",
+                exclude_unset=True,
+            )
             # input_files are per-run and should not be merged into session config.
             request_config.pop("input_files", None)
             # Extract mcp_config toggles before merging (don't merge as dict)

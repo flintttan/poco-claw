@@ -1,12 +1,55 @@
 ---
-title: Background Execution and Scheduled Jobs
-description: Keep agents running in the cloud even after the browser is closed.
+title: Background execution and scheduled jobs
+description: Keep agents running after the browser closes and flow their status back into server collaboration.
 ---
 
-Poco supports long-running tasks beyond an active browser tab.
+Poco supports long-running tasks beyond an active browser tab. This powers not only standalone task execution, but also persistent agents inside server and channel collaboration.
+
+## Background execution flow
+
+After a task is created, Backend stores the run. Executor Manager claims and dispatches it, and Executor keeps running in the sandbox. Closing the browser only disconnects the current UI session; it doesn't delete an already scheduled run.
+
+```mermaid
+sequenceDiagram
+    participant UI as Browser UI
+    participant Backend as Backend
+    participant Manager as Executor Manager
+    participant Executor as Executor
+
+    UI->>Backend: Create run
+    Backend->>Backend: Store queued state
+    Manager->>Backend: Claim run
+    Backend-->>Manager: Return run snapshot
+    Manager->>Executor: Dispatch
+    UI--xBackend: User closes browser
+    Executor-->>Backend: Keep writing execution events
+    UI->>Backend: User reopens page later
+    Backend-->>UI: Return latest state and history
+```
+
+## Scheduled and delayed execution
+
+Executor Manager can treat tasks as schedulable objects. A task can wait until a specific time or run when the scheduler rule becomes due.
+
+```mermaid
+flowchart TD
+    A["Create scheduled task"] --> B["Store schedule"]
+    B --> C["Scheduler tick"]
+    C --> D{"Due now?"}
+    D -->|"No"| C
+    D -->|"Yes"| E["Create or claim run"]
+    E --> F["Dispatch to executor"]
+    F --> G["Callbacks update backend"]
+```
 
 ## Highlights
+
+Background execution matters most when work needs to keep moving without an active browser tab.
 
 - Tasks can keep running after the browser is closed
 - Scheduled jobs support recurring or delayed execution
 - Cloud-side execution fits longer or asynchronous workflows
+
+## How this appears in server collaboration
+
+When you `@agent` inside a channel, Poco can resume that agent's persistent runtime and keep the work moving in the background. The channel shows a compact execution placeholder first, while deeper thinking, tool calls, and runtime details stay inside the execution drawer. You can keep following progress without pinning the browser tab in the foreground.

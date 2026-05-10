@@ -3,10 +3,49 @@ title: 计划模式与对话控制
 description: 支持 Plan Mode、对话排队与对话终止等工作流能力。
 ---
 
-Poco 提供面向工作流的对话控制能力。
+Poco 提供面向工作流的对话控制能力。Plan Mode 用于执行前规划，对话排队用于处理连续输入，终止能力用于在方向错误或风险过高时停止任务。
+
+## Plan Mode 流程
+
+Plan Mode 的核心是先产出计划，再由用户决定是否进入执行。这个阶段不应默认修改文件，也不应把计划和执行混成一步。
+
+```mermaid
+sequenceDiagram
+    participant User as 用户
+    participant Agent as Agent
+    participant UI as Poco UI
+    participant Executor as Executor
+
+    User->>UI: 开启 Plan Mode 并提交需求
+    UI->>Agent: 请求生成计划
+    Agent-->>UI: 返回步骤、风险和待确认点
+    User->>UI: 批准、修改或取消
+    UI->>Executor: 批准后进入执行
+    Executor-->>UI: 回写执行事件
+```
+
+这个流程适合代码修改、架构调整、文档批量编辑和任何需要先明确范围的任务。
+
+## 对话排队与终止
+
+长任务运行时，用户可能继续发送补充信息。Poco 需要把这些输入和当前执行状态协调起来，避免多个响应互相覆盖。
+
+```mermaid
+flowchart TD
+    A["Active run"] --> B{"New user input"}
+    B --> C["Queue next turn"]
+    A --> D{"User stops run"}
+    D --> E["Cancel current execution"]
+    C --> F["Run after current turn"]
+    E --> G["Persist stopped state"]
+```
+
+排队让连续输入有序处理，终止让错误方向可以干净停止。两者都必须回写状态，方便用户理解当前任务处于什么阶段。
 
 ## 亮点
 
-- 使用 **Plan Mode** 在执行前进行结构化规划
-- 支持对话排队，处理多个待响应交互
-- 支持对话终止，让任务可以被干净地停止
+这些控制能力让 Agent 工作流更接近真实协作。
+
+- 使用 **Plan Mode** 在执行前进行结构化规划。
+- 支持对话排队，处理多个待响应交互。
+- 支持对话终止，让任务可以被干净地停止。
