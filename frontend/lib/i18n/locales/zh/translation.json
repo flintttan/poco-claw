@@ -85,6 +85,7 @@
       "stateRoot": "状态根目录",
       "memoryFile": "记忆文件",
       "activeTask": "当前任务",
+      "activeSession": "当前会话",
       "preset": "Preset #{{id}}",
       "tempRuntime": "临时 runtime",
       "promote": "提升结果",
@@ -1651,6 +1652,7 @@
       "fields": {
         "name": "名称",
         "namePlaceholder": "code-reviewer",
+        "nameHint": "只允许 A-Za-z0-9._-",
         "enabled": "启用",
         "description": "描述",
         "descriptionOptional": "描述（可选）",
@@ -2210,10 +2212,21 @@
         "createTitle": "创建预设",
         "editTitle": "编辑预设"
       },
+      "panel": {
+        "newPresetLabel": "新预设",
+        "headerDescriptionFallback": "暂无描述",
+        "changeVisual": "切换预设头像",
+        "visualHint": "这个头像会显示在预设列表和相关入口中。",
+        "createdLabel": "创建时间"
+      },
       "subagents": {
         "title": "内联子代理",
         "description": "定义会随预设一起注入的额外子代理。",
         "add": "添加子代理",
+        "import": "导入",
+        "importDialogTitle": "导入已有子代理",
+        "importDialogDescription": "从“能力”模块中已配置的结构化子代理里选择，并复制到当前预设。",
+        "importEmpty": "暂无可导入的结构化子代理。",
         "empty": "暂未配置子代理",
         "itemTitle": "子代理 {{index}}",
         "fields": {
@@ -2231,7 +2244,15 @@
         "updated": "预设已更新",
         "deleted": "预设已删除",
         "saveFailed": "保存预设失败",
-        "deleteFailed": "删除预设失败"
+        "deleteFailed": "删除预设失败",
+        "deleteBlocked": "暂时无法删除该预设：{{dependencies}}"
+      },
+      "deleteDependencies": {
+        "project_default": "{{count}} 个项目默认预设",
+        "live_agent_identity": "{{count}} 个存活 agent",
+        "active_assignment": "{{count}} 个活跃 assignment",
+        "channel_task_assignee": "{{count}} 个频道任务分配",
+        "unknown": "{{count}} 个未知依赖"
       }
     },
     "skillSettings": {
@@ -2424,6 +2445,7 @@
     "delete": "删除"
   },
   "common": {
+    "add": "添加",
     "cancel": "取消",
     "close": "关闭",
     "create": "创建",
@@ -2434,6 +2456,7 @@
     "enabled": "已开启",
     "disabled": "已禁用",
     "edit": "编辑",
+    "import": "导入",
     "saving": "保存中...",
     "default": "默认",
     "forced": "强制",

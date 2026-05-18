@@ -84,6 +84,7 @@
       "stateRoot": "State root",
       "memoryFile": "Memory file",
       "activeTask": "Active task",
+      "activeSession": "Active session",
       "preset": "Preset #{{id}}",
       "tempRuntime": "Temporary runtime",
       "promote": "Promote result",
@@ -1676,6 +1677,7 @@
       "fields": {
         "name": "Nom",
         "namePlaceholder": "code-reviewer",
+        "nameHint": "Seuls A-Za-z0-9._- sont autorisés.",
         "enabled": "Activé",
         "description": "Description",
         "descriptionOptional": "Description (optionnelle)",
@@ -2232,10 +2234,21 @@
         "createTitle": "Créer un préréglage",
         "editTitle": "Modifier le préréglage"
       },
+      "panel": {
+        "newPresetLabel": "Nouveau préréglage",
+        "headerDescriptionFallback": "Aucune description pour le moment",
+        "changeVisual": "Changer l’avatar du préréglage",
+        "visualHint": "Cet avatar apparaît dans la liste des préréglages et aux points d’entrée associés.",
+        "createdLabel": "Créé"
+      },
       "subagents": {
         "title": "Sous-agents inline",
         "description": "Définissez des sous-agents supplémentaires à injecter avec ce préréglage.",
         "add": "Ajouter un sous-agent",
+        "import": "Importer",
+        "importDialogTitle": "Importer des sous-agents existants",
+        "importDialogDescription": "Sélectionnez des sous-agents structurés déjà configurés dans Capacités et copiez-les dans ce préréglage.",
+        "importEmpty": "Aucun sous-agent structuré disponible à importer.",
         "empty": "Aucun sous-agent configuré",
         "itemTitle": "Sous-agent {{index}}",
         "fields": {
@@ -2253,7 +2266,15 @@
         "updated": "Préréglage mis à jour",
         "deleted": "Préréglage supprimé",
         "saveFailed": "Échec de l’enregistrement du préréglage",
-        "deleteFailed": "Échec de la suppression du préréglage"
+        "deleteFailed": "Échec de la suppression du préréglage",
+        "deleteBlocked": "Can't delete this preset yet: {{dependencies}}"
+      },
+      "deleteDependencies": {
+        "project_default": "{{count}} project defaults",
+        "live_agent_identity": "{{count}} live agents",
+        "active_assignment": "{{count}} active assignments",
+        "channel_task_assignee": "{{count}} channel task assignees",
+        "unknown": "{{count}} unknown dependencies"
       }
     },
     "skillSettings": {
@@ -2446,12 +2467,14 @@
     "delete": "Supprimer"
   },
   "common": {
+    "add": "Ajouter",
     "cancel": "Annuler",
     "close": "Fermer",
     "create": "Créer",
     "delete": "Supprimer",
     "deleted": "Supprimé",
     "edit": "Modifier",
+    "import": "Importer",
     "save": "Enregistrer",
     "saving": "Enregistrement...",
     "confirm": "Confirmer",
