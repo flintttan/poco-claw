@@ -1,6 +1,11 @@
 import type { LucideIcon } from "lucide-react";
 
-export type SettingsTabId = "account" | "usage" | "shortcuts" | "admin";
+export type SettingsTabId =
+  | "account"
+  | "usage"
+  | "shortcuts"
+  | "connections"
+  | "admin";
 
 export type SettingsTabRequest = {
   tab: SettingsTabId;

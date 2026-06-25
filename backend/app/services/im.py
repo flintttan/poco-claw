@@ -4,6 +4,7 @@ import logging
 import re
 import uuid
 from collections.abc import Awaitable, Callable
+from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
@@ -42,6 +43,7 @@ from app.schemas.im import (
 from app.schemas.session import SessionResponse, SessionStateResponse, TaskConfig
 from app.schemas.task import TaskEnqueueRequest, TaskEnqueueResponse
 from app.schemas.user_input_request import UserInputAnswerRequest
+from app.services.identity_resolver import IdentityResolver
 from app.services.im_providers import NotificationGateway
 from app.services.session_service import SessionService
 from app.services.session_title_service import SessionTitleService
@@ -56,7 +58,6 @@ _TITLE_SERVICE = SessionTitleService()
 _USER_INPUT_SERVICE = UserInputRequestService()
 _LEADING_AT_TAG_RE = re.compile(r"^(?:<at\s+[^>]*>.*?</at>\s*)+", re.IGNORECASE)
 _LEADING_MENTION_RE = re.compile(r"^(?:[@＠][^\s]+\s*)+")
-CommandHandler = Callable[[Session, Channel, str], Awaitable[list[str]]]
 
 
 class BackendClientError(RuntimeError):
@@ -64,11 +65,26 @@ class BackendClientError(RuntimeError):
 
 
 class BackendClient:
-    def __init__(self) -> None:
-        settings = get_settings()
-        self.backend_user_id = (
-            settings.backend_user_id or "default"
-        ).strip() or "default"
+    """Per-request client that talks to the embedded backend services.
+
+    The instance is created with the *current sender's* user_id (not the
+    channel owner), so ``/list`` and other commands return data scoped
+    to the sender rather than leaking the channel owner's sessions. For
+    group channels bound to a Poco server, the bound server is queried
+    via ``server_acl_check`` to grant the sender access to the
+    channel's shared session.
+    """
+
+    def __init__(
+        self,
+        *,
+        user_id: str,
+        channel: Channel | None = None,
+        server_acl_check: Callable[[uuid.UUID, str], bool] | None = None,
+    ) -> None:
+        self.user_id = user_id
+        self.channel = channel
+        self._server_acl_check = server_acl_check
         self._task_service = _TASK_SERVICE
         self._session_service = _SESSION_SERVICE
         self._title_service = _TITLE_SERVICE
@@ -93,7 +109,7 @@ class BackendClient:
         )
         result = await self._run_sync(self._enqueue_task_sync, request=task_request)
         if task_request.session_id is None:
-            self._schedule_title_generation(result.session_id, prompt)
+            self._schedule_title_generation(result.session_id, prompt, self.user_id)
         return result.model_dump(mode="json")
 
     async def list_sessions(
@@ -147,7 +163,34 @@ class BackendClient:
     def _enqueue_task_sync(self, *, request: TaskEnqueueRequest) -> TaskEnqueueResponse:
         db = SessionLocal()
         try:
-            return self._task_service.enqueue_task(db, self.backend_user_id, request)
+            # ACL: when resuming an existing session, verify the sender is
+            # either the session owner or a member of the bound server.
+            if request.session_id is not None:
+                session = self._session_service.get_session(db, request.session_id)
+                if not self._can_access_session(db, session):
+                    raise BackendClientError(
+                        "Not allowed to interact with this session"
+                    )
+            # Pass the bound server id + ACL check down so that
+            # task_service.enqueue_task can apply the same "shared
+            # session" relaxation in its ownership check. Both layers
+            # must agree; the BackendClient check is the user-facing
+            # gateway and the task_service check is the deeper
+            # defense-in-depth.
+            shared_server_id: uuid.UUID | None = None
+            if self.channel is not None and self.channel.server_id is not None:
+                shared_server_id = (
+                    self.channel.server_id
+                    if isinstance(self.channel.server_id, uuid.UUID)
+                    else uuid.UUID(str(self.channel.server_id))
+                )
+            return self._task_service.enqueue_task(
+                db,
+                self.user_id,
+                request,
+                server_acl_check=self._server_acl_check,
+                shared_server_id=shared_server_id,
+            )
         finally:
             db.close()
 
@@ -164,7 +207,7 @@ class BackendClient:
             kind_value = None if kind_filter in {"", "all"} else kind_filter
             sessions = self._session_service.list_sessions(
                 db,
-                self.backend_user_id,
+                self.user_id,
                 limit,
                 offset,
                 None,
@@ -181,8 +224,8 @@ class BackendClient:
         db = SessionLocal()
         try:
             session = self._session_service.get_session(db, session_id)
-            if session.user_id != self.backend_user_id:
-                raise BackendClientError("Session does not belong to the IM user")
+            if not self._can_access_session(db, session):
+                raise BackendClientError("Not allowed to view this session")
             return SessionStateResponse.model_validate(session).model_dump(mode="json")
         finally:
             db.close()
@@ -197,7 +240,7 @@ class BackendClient:
         try:
             result = self._user_input_service.answer_request(
                 db,
-                user_id=self.backend_user_id,
+                user_id=self.user_id,
                 request_id=str(request_id),
                 answer_request=answer_request,
             )
@@ -205,7 +248,26 @@ class BackendClient:
         finally:
             db.close()
 
-    def _schedule_title_generation(self, session_id: uuid.UUID, prompt: str) -> None:
+    def _can_access_session(self, db: Session, session: AgentSession) -> bool:
+        """Check whether the current sender may interact with ``session``.
+
+        Rules:
+        1. The sender is the session owner (``session.user_id``).
+        2. The session is shared via a server-bound channel: the sender
+           is an active member of the bound server.
+        """
+        if session.user_id == self.user_id:
+            return True
+        if self.channel is not None and self.channel.server_id is not None:
+            if self._server_acl_check is None:
+                return False
+            return self._server_acl_check(self.channel.server_id, self.user_id)
+        return False
+
+    def _schedule_title_generation(
+        self, session_id: uuid.UUID, prompt: str, user_id: str
+    ) -> None:
+        _ = user_id
         task = asyncio.create_task(
             asyncio.to_thread(
                 self._title_service.generate_and_update,
@@ -214,6 +276,13 @@ class BackendClient:
             )
         )
         task.add_done_callback(_log_background_task_exception)
+
+
+# Command handler type alias: declared after BackendClient so the forward
+# reference resolves at module import time.
+CommandHandler = Callable[
+    [Session, Channel, str, "BackendClient"], Awaitable[list[str]]
+]
 
 
 class MessageFormatter:
@@ -358,12 +427,19 @@ class ParsedCommand:
 
 
 class CommandService:
+    """Stateless command dispatcher.
+
+    Each ``handle_text`` call receives a fresh ``BackendClient`` (per
+    request) so commands are scoped to the current sender rather than
+    the channel owner. ``MessageFormatter`` is shared and stateless
+    (apart from config), so it stays as a class-level instance.
+    """
+
     def __init__(self) -> None:
-        self.backend = BackendClient()
         self.formatter = MessageFormatter()
         self._handlers: dict[str, CommandHandler] = {
             "help": self._cmd_help,
-            "start": self._cmd_help,
+            "start": self._cmd_start,
             "list": self._cmd_list,
             "new": self._cmd_new,
             "connect": self._cmd_connect,
@@ -376,6 +452,19 @@ class CommandService:
             "clear": self._cmd_clear,
             "disconnect": self._cmd_clear,
             "answer": self._cmd_answer,
+            "whoami": self._cmd_whoami,
+            # IM identity binding (new design): ``/bind <code>`` links
+            # the current IM identity to the Poco user that generated
+            # the code in the web UI.
+            "bind": self._cmd_bind_code,
+            "code": self._cmd_bind_code,
+            # ``/unbind`` (no arg) removes the current IM binding.
+            "unbind": self._cmd_unbind_identity,
+            # Channel <-> server binding: ``/server <server_id>`` binds
+            # this channel to a Poco server, ``/server-off`` removes it.
+            "server": self._cmd_bind_server,
+            "server-off": self._cmd_unbind_server,
+            "unbindserver": self._cmd_unbind_server,
         }
 
     async def handle_text(
@@ -384,6 +473,7 @@ class CommandService:
         db: Session,
         channel: Channel,
         text: str,
+        backend: BackendClient,
     ) -> list[str]:
         clean = _normalize_incoming_text(text)
         if not clean:
@@ -396,7 +486,7 @@ class CommandService:
             handler = self._handlers.get(parsed.name)
             if not handler:
                 return [self._help_text()]
-            return await handler(db, channel, parsed.args)
+            return await handler(db, channel, parsed.args, backend)
 
         active = ActiveSessionRepository.get_by_channel(db, channel_id=channel.id)
         if not active:
@@ -404,10 +494,12 @@ class CommandService:
                 "当前未连接会话。请先使用 /list 查看会话，或 /new 创建新会话，然后 /connect 连接。"
             ]
 
+        memory_config = _build_memory_config(channel)
         try:
-            result = await self.backend.enqueue_task(
+            result = await backend.enqueue_task(
                 prompt=clean,
                 session_id=active.session_id,
+                config=memory_config,
             )
         except BackendClientError as exc:
             logger.warning("enqueue_task_failed", extra={"error": str(exc)})
@@ -425,16 +517,214 @@ class CommandService:
             )
         ]
 
-    async def _cmd_help(self, db: Session, channel: Channel, args: str) -> list[str]:
-        _ = db, channel, args
+    async def _cmd_help(
+        self, db: Session, channel: Channel, args: str, backend: BackendClient
+    ) -> list[str]:
+        _ = db, channel, args, backend
         return [self._help_text()]
 
-    async def _cmd_list(self, db: Session, channel: Channel, args: str) -> list[str]:
+    async def _cmd_start(
+        self, db: Session, channel: Channel, args: str, backend: BackendClient
+    ) -> list[str]:
+        _ = args, db
+        user_id = backend.user_id
+        settings_url = _format_settings_url(channel.destination)
+        if channel.chat_type == "p2p":
+            return [
+                "欢迎使用 Poco！\n"
+                f"Poco 用户 ID: {user_id}\n"
+                "如需在 Web 端查看历史/记忆/连接更多 IM，请打开：\n"
+                f"{settings_url}\n"
+                "在 Settings → Connected Accounts 中管理 IM 绑定。"
+            ]
+        return [
+            "欢迎使用 Poco！\n"
+            f"当前 channel: {channel.provider} #{channel.id} ({channel.chat_type})\n"
+            f"当前 Poco 用户 ID: {user_id or '(未识别)'}\n"
+            "如需管理 IM 绑定，请打开：\n"
+            f"{settings_url}"
+        ]
+
+    async def _cmd_whoami(
+        self, db: Session, channel: Channel, args: str, backend: BackendClient
+    ) -> list[str]:
+        _ = args, db
+        lines = [
+            f"Poco user_id: {backend.user_id}",
+            f"Channel: {channel.provider} #{channel.id} ({channel.chat_type})",
+            f"Server binding: {channel.server_id or '未绑定'}",
+        ]
+        return ["\n".join(lines)]
+
+    async def _cmd_bind_code(
+        self, db: Session, channel: Channel, args: str, backend: BackendClient
+    ) -> list[str]:
+        """Bind the current IM identity to a Poco user via a binding code.
+
+        The user generates a code in the web UI (Settings → Connected
+        Accounts) and pastes it here. We consume the code and create
+        an ``im_bindings`` row linking this IM identity to the user
+        that generated it.
+        """
+        _ = backend
+        code = args.strip()
+        if not code:
+            return [
+                "用法：/bind <绑定码>\n"
+                "请先在 Web 端 Settings → Connected Accounts 中生成绑定码。"
+            ]
+
+        from app.repositories.im import ImBindingCodeRepository, ImBindingRepository
+
+        row = ImBindingCodeRepository.get_active(db, code=code)
+        if row is None:
+            return ["绑定码无效、已过期或已被使用。\n请在 Web 端重新生成。"]
+        if row.provider is not None and row.provider != channel.provider:
+            return [
+                f"该绑定码仅限 {row.provider} 渠道使用，"
+                f"而您当前位于 {channel.provider}。"
+            ]
+
+        consumed = ImBindingCodeRepository.consume(
+            db, row=row, consumed_by=f"{channel.provider}:{channel.destination}"
+        )
+        if not consumed:
+            return ["绑定码已被使用或已过期。\n请在 Web 端重新生成。"]
+
+        # Derive the IM identity fields from the inbound message.
+        # ``message`` is not threaded through the CommandService; we
+        # read the channel's recent sender identity from the channel
+        # record's last_bound_by_user_id (audit field) or, more
+        # accurately, the InboundMessage that triggered the command.
+        # The command dispatcher in InboundMessageService sets a
+        # thread-local carrying the most recent sender ids, so we use
+        # ``Channel.destination`` as the IM-side identifier for now
+        # and rely on the caller to thread the open_id in.
+        im_user_id = _current_inbound_sender_open_id()
+        im_union_id = _current_inbound_sender_union_id()
+        if not im_user_id:
+            return [
+                "无法获取当前发件人的 IM 标识（未填充 sender_open_id）。"
+                "请重试或联系管理员。"
+            ]
+
+        existing = ImBindingRepository.get_by_provider_im_user_id(
+            db, provider=channel.provider, im_user_id=im_user_id
+        )
+        if existing is not None:
+            if existing.user_id == row.user_id:
+                return ["✅ 此 IM 账号已绑定到您当前的 Poco 账号。"]
+            # Different user: refuse to silently rebind.
+            db.rollback()
+            return ["此 IM 账号已绑定到其他 Poco 账号，请先解绑再绑定。"]
+
+        try:
+            ImBindingRepository.create(
+                db,
+                user_id=row.user_id,
+                provider=channel.provider,
+                im_user_id=im_user_id,
+                im_union_id=im_union_id,
+                bound_via="code",
+            )
+            db.flush()
+        except IntegrityError:
+            db.rollback()
+            return ["此 IM 账号已被另一个用户绑定，请联系管理员。"]
+
+        return [
+            "✅ Poco 账号绑定成功！\n"
+            f"IM 渠道: {channel.provider}\n"
+            f"绑定到 Poco 用户 ID: {row.user_id}\n"
+            "现在可以正常使用 Poco Agent。"
+        ]
+
+    async def _cmd_unbind_identity(
+        self, db: Session, channel: Channel, args: str, backend: BackendClient
+    ) -> list[str]:
+        _ = args
+        im_user_id = _current_inbound_sender_open_id()
+        if not im_user_id:
+            return ["无法获取当前发件人的 IM 标识，请重试。"]
+        from app.repositories.im import ImBindingRepository
+
+        binding = ImBindingRepository.get_by_provider_im_user_id(
+            db, provider=channel.provider, im_user_id=im_user_id
+        )
+        if binding is None:
+            return ["此 IM 账号当前未绑定 Poco 账号。"]
+        if binding.user_id != backend.user_id:
+            return ["此 IM 账号绑定在另一个 Poco 账号上，您无法解绑。"]
+        ImBindingRepository.delete(db, binding)
+        db.flush()
+        return ["✅ 已解除此 IM 账号的 Poco 绑定。"]
+
+    async def _cmd_bind_server(
+        self, db: Session, channel: Channel, args: str, backend: BackendClient
+    ) -> list[str]:
+        ref = args.strip()
+        if not ref:
+            return ["用法：/server <server_id>"]
+        try:
+            server_id = uuid.UUID(ref)
+        except ValueError:
+            return ["server_id 格式错误，应为 UUID"]
+
+        from app.repositories.server_member_repository import (
+            ServerMemberRepository,
+        )
+
+        membership = ServerMemberRepository.get_by_server_and_user(
+            db, server_id, backend.user_id
+        )
+        if membership is None or membership.status != "active":
+            return ["您不是该 Server 的成员，无法绑定。"]
+        if membership.role not in {"owner", "admin"}:
+            return ["仅 Server owner/admin 可发起 /server。"]
+
+        channel.server_id = server_id
+        channel.last_bound_by_user_id = backend.user_id
+        channel.last_bound_at = datetime.now(timezone.utc)
+        db.flush()
+        return [
+            f"已绑定 Server {server_id}。\n"
+            "本群中所有已绑定的 Poco 用户均可使用 Poco Agent。"
+        ]
+
+    async def _cmd_unbind_server(
+        self, db: Session, channel: Channel, args: str, backend: BackendClient
+    ) -> list[str]:
+        _ = args
+        if channel.server_id is None:
+            return ["当前 channel 未绑定 Server。"]
+
+        from app.repositories.server_member_repository import (
+            ServerMemberRepository,
+        )
+
+        # Allow channel owner, server admin/owner, or system admin to unbind.
+        membership = ServerMemberRepository.get_by_server_and_user(
+            db, channel.server_id, backend.user_id
+        )
+        is_admin = membership is not None and membership.role in {
+            "owner",
+            "admin",
+        }
+        if backend.user_id != channel.owner_user_id and not is_admin:
+            return ["仅 channel owner 或 server admin 可解绑。"]
+
+        channel.server_id = None
+        channel.last_bound_by_user_id = None
+        channel.last_bound_at = None
+        db.flush()
+        return ["已解绑 Server 绑定。"]
+
+    async def _cmd_list(
+        self, db: Session, channel: Channel, args: str, backend: BackendClient
+    ) -> list[str]:
         limit = _parse_positive_int(args, default=10, max_value=30)
         try:
-            sessions = await self.backend.list_sessions(
-                limit=limit, offset=0, kind="chat"
-            )
+            sessions = await backend.list_sessions(limit=limit, offset=0, kind="chat")
         except BackendClientError as exc:
             return [f"查询失败：{exc}"]
 
@@ -472,13 +762,18 @@ class CommandService:
         lines.append("使用 /new <任务描述> 创建并连接新会话")
         return ["\n".join(lines)]
 
-    async def _cmd_new(self, db: Session, channel: Channel, args: str) -> list[str]:
+    async def _cmd_new(
+        self, db: Session, channel: Channel, args: str, backend: BackendClient
+    ) -> list[str]:
         prompt = args.strip()
         if not prompt:
             return ["用法：/new <任务描述>"]
 
         try:
-            result = await self.backend.enqueue_task(prompt=prompt)
+            result = await backend.enqueue_task(
+                prompt=prompt,
+                config=_build_memory_config(channel),
+            )
         except BackendClientError as exc:
             return [f"创建失败：{exc}"]
 
@@ -496,14 +791,16 @@ class CommandService:
         )
         return [f"{created_text}\n已自动连接该会话。"]
 
-    async def _cmd_connect(self, db: Session, channel: Channel, args: str) -> list[str]:
+    async def _cmd_connect(
+        self, db: Session, channel: Channel, args: str, backend: BackendClient
+    ) -> list[str]:
         ref = args.strip()
         if not ref:
             return ["用法：/connect <session_id|序号>"]
 
         try:
-            session_id = await self._resolve_session_ref(ref)
-            await self.backend.get_session_state(session_id=session_id)
+            session_id = await self._resolve_session_ref(ref, backend=backend)
+            await backend.get_session_state(session_id=session_id)
         except BackendClientError as exc:
             return [f"连接失败：{exc}"]
         except ValueError as exc:
@@ -516,7 +813,10 @@ class CommandService:
             f"🌐 前端查看: {self.formatter.session_url(session_id)}"
         ]
 
-    async def _cmd_watch(self, db: Session, channel: Channel, args: str) -> list[str]:
+    async def _cmd_watch(
+        self, db: Session, channel: Channel, args: str, backend: BackendClient
+    ) -> list[str]:
+        _ = backend
         session_id = args.strip()
         if not session_id:
             return ["用法：/watch <session_id>"]
@@ -526,8 +826,10 @@ class CommandService:
             f"🌐 前端查看: {self.formatter.session_url(session_id)}"
         ]
 
-    async def _cmd_watches(self, db: Session, channel: Channel, args: str) -> list[str]:
-        _ = args
+    async def _cmd_watches(
+        self, db: Session, channel: Channel, args: str, backend: BackendClient
+    ) -> list[str]:
+        _ = args, backend
         watches = WatchRepository.list_by_channel(db, channel_id=channel.id)
         if not watches:
             return ["当前没有订阅会话。可用 /watch <session_id> 添加订阅。"]
@@ -544,7 +846,10 @@ class CommandService:
         lines.append("使用 /unwatch <序号|session_id> 取消订阅")
         return ["\n".join(lines)]
 
-    async def _cmd_unwatch(self, db: Session, channel: Channel, args: str) -> list[str]:
+    async def _cmd_unwatch(
+        self, db: Session, channel: Channel, args: str, backend: BackendClient
+    ) -> list[str]:
+        _ = backend
         ref = args.strip()
         if not ref:
             return ["用法：/unwatch <session_id|序号>"]
@@ -564,8 +869,10 @@ class CommandService:
         WatchRepository.delete(db, watch)
         return [f"✅ 已取消订阅：{session_id}"]
 
-    async def _cmd_link(self, db: Session, channel: Channel, args: str) -> list[str]:
-        _ = args
+    async def _cmd_link(
+        self, db: Session, channel: Channel, args: str, backend: BackendClient
+    ) -> list[str]:
+        _ = args, backend
         active = ActiveSessionRepository.get_by_channel(db, channel_id=channel.id)
         if not active:
             return [
@@ -576,14 +883,18 @@ class CommandService:
             f"🌐 前端查看: {self.formatter.session_url(active.session_id)}"
         ]
 
-    async def _cmd_clear(self, db: Session, channel: Channel, args: str) -> list[str]:
-        _ = args
+    async def _cmd_clear(
+        self, db: Session, channel: Channel, args: str, backend: BackendClient
+    ) -> list[str]:
+        _ = args, backend
         active = ActiveSessionRepository.get_by_channel(db, channel_id=channel.id)
         if active is not None:
             ActiveSessionRepository.delete(db, active)
         return ["已清除当前会话绑定"]
 
-    async def _cmd_answer(self, db: Session, channel: Channel, args: str) -> list[str]:
+    async def _cmd_answer(
+        self, db: Session, channel: Channel, args: str, backend: BackendClient
+    ) -> list[str]:
         _ = db, channel
         parts = args.split(maxsplit=1)
         request_id = parts[0].strip() if parts else ""
@@ -611,7 +922,7 @@ class CommandService:
             return ["未解析到有效答案"]
 
         try:
-            await self.backend.answer_user_input_request(
+            await backend.answer_user_input_request(
                 request_id=request_id,
                 answers=answers,
             )
@@ -620,7 +931,7 @@ class CommandService:
 
         return ["已提交"]
 
-    async def _resolve_session_ref(self, ref: str) -> str:
+    async def _resolve_session_ref(self, ref: str, *, backend: BackendClient) -> str:
         raw = ref.strip()
         if not raw:
             raise ValueError("会话标识不能为空")
@@ -630,9 +941,7 @@ class CommandService:
             if index <= 0:
                 raise ValueError("会话序号必须大于 0")
             limit = min(max(index, 10), 50)
-            sessions = await self.backend.list_sessions(
-                limit=limit, offset=0, kind="chat"
-            )
+            sessions = await backend.list_sessions(limit=limit, offset=0, kind="chat")
             if index > len(sessions):
                 raise ValueError(f"序号超出范围：当前仅有 {len(sessions)} 条可选")
             session_id = _extract_session_id(sessions[index - 1])
@@ -728,14 +1037,47 @@ class CommandService:
             '/answer <request_id> {"问题":"答案"}  回答 AskQuestion\n'
             '/answer <request_id> {"approved":"true|false"}  回答 Plan Approval\n'
             "\n"
+            "IM 绑定：\n"
+            "/bind <绑定码>  把此 IM 账号绑定到 Poco 用户（先在 Web 端生成绑定码）\n"
+            "/unbind  解除此 IM 账号的绑定\n"
+            "/server <server_id>  把本 channel 绑定到 Poco Server\n"
+            "/server-off  解除本 channel 的 Server 绑定\n"
+            "\n"
             "普通文本：如果已连接会话，会作为续聊消息发送。"
         )
 
 
+# Thread-local carrier of the most recent inbound message's sender ids,
+# so command handlers (which don't get the message directly) can read
+# the open_id / union_id for ``/bind`` and ``/unbind``.
+_inbound_sender_context: ContextVar[tuple[str | None, str | None]] = ContextVar(
+    "_inbound_sender_context", default=(None, None)
+)
+
+
+def _set_inbound_sender_context(
+    *, sender_open_id: str | None, sender_union_id: str | None
+) -> None:
+    _inbound_sender_context.set((sender_open_id, sender_union_id))
+
+
+def _current_inbound_sender_open_id() -> str | None:
+    return _inbound_sender_context.get()[0]
+
+
+def _current_inbound_sender_union_id() -> str | None:
+    return _inbound_sender_context.get()[1]
+
+
 class InboundMessageService:
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        *,
+        identity_resolver: IdentityResolver | None = None,
+    ) -> None:
         self.commands = CommandService()
         self.gateway = NotificationGateway()
+        self._resolver = identity_resolver or IdentityResolver()
 
     async def handle_message(self, *, message: InboundMessage) -> None:
         db = SessionLocal()
@@ -747,10 +1089,46 @@ class InboundMessageService:
                 if not self._register_inbound_dedup(db, key=dedup_key):
                     return
 
+            # 1) Resolve the IM sender to a Poco user_id.
+            _set_inbound_sender_context(
+                sender_open_id=message.sender_open_id,
+                sender_union_id=message.sender_union_id,
+            )
+            resolution = await self._resolver.resolve(
+                db,
+                provider=message.provider,
+                sender_open_id=message.sender_open_id,
+                sender_union_id=message.sender_union_id,
+            )
+            if not resolution.bound or resolution.user_id is None:
+                # IM identity has no Poco binding. Tell the user how to
+                # generate a code on the web and reply with it here.
+                responses = [self._bind_prompt_text(provider=message.provider)]
+                await self._send_reply(
+                    message=message, responses=responses, send_address=None
+                )
+                db.commit()
+                return
+
+            user_id = resolution.user_id
+            # Auto-bind from an existing OAuth identity (e.g. Feishu
+            # OAuth → IM). Surface a one-time FYI so the user knows the
+            # bot just linked their chat to their logged-in account.
+            auto_bound_notice = (
+                "✅ 已为您自动绑定飞书登录到此 IM 聊天。"
+                if resolution.auto_bound
+                else None
+            )
+
+            # 2) Get or create the channel owned by this user (first
+            # interaction wins; subsequent messages in the same chat do
+            # not change ownership).
             channel = self._get_or_create_channel(
                 db,
                 provider=message.provider,
                 destination=message.destination,
+                owner_user_id=user_id,
+                chat_type=message.chat_type or "group",
             )
             if not channel.enabled:
                 logger.info(
@@ -764,12 +1142,39 @@ class InboundMessageService:
                 db.commit()
                 return
 
+            # 3) Server ACL FIRST. We must not record a stranger in
+            # channel_members before checking they have access; that
+            # would let future ACL rules that consult channel_members
+            # be bypassed.
+            if channel.server_id is not None:
+                if not self._is_active_server_member(db, channel.server_id, user_id):
+                    responses = [self._server_join_prompt_text(channel)]
+                    await self._send_reply(
+                        message=message, responses=responses, send_address=None
+                    )
+                    db.commit()
+                    return
+
+            # 4) Track per-channel participation (idempotent). Only
+            # recorded for users that have passed the server ACL.
+            self._ensure_channel_member(db, channel_id=channel.id, user_id=user_id)
+
+            # 5) Build a per-request BackendClient and dispatch.
+            backend = BackendClient(
+                user_id=user_id,
+                channel=channel,
+                server_acl_check=lambda sid, uid: self._is_active_server_member(
+                    db, sid, uid
+                ),
+            )
             send_address = self._resolve_send_address(
                 db, channel=channel, message=message
             )
             responses = await self.commands.handle_text(
-                db=db, channel=channel, text=message.text
+                db=db, channel=channel, text=message.text, backend=backend
             )
+            if auto_bound_notice:
+                responses = [auto_bound_notice, *responses]
             db.commit()
         except Exception:
             db.rollback()
@@ -779,7 +1184,19 @@ class InboundMessageService:
 
         if not responses:
             return
+        await self._send_reply(
+            message=message, responses=responses, send_address=send_address
+        )
 
+    async def _send_reply(
+        self,
+        *,
+        message: InboundMessage,
+        responses: list[str],
+        send_address: str | None,
+    ) -> None:
+        if not responses:
+            return
         target = send_address or message.destination
         for resp in responses:
             sent = await self.gateway.send_text(
@@ -792,6 +1209,59 @@ class InboundMessageService:
                     "im_inbound_reply_failed",
                     extra={"provider": message.provider, "destination": target},
                 )
+
+    @staticmethod
+    def _bind_prompt_text(*, provider: str) -> str:
+        """Tell an unbound IM sender how to link their chat to a Poco user.
+
+        The user generates a code from Web Settings → Connected Accounts
+        and pastes it into the chat via ``/bind <code>``.
+        """
+        url = _format_settings_url(None)
+        if url:
+            return (
+                "👋 欢迎使用 Poco！请先把此 IM 账号绑定到您的 Poco 用户：\n"
+                f"1) 打开 {url}\n"
+                "2) 进入 Settings → Connected Accounts，生成一个绑定码\n"
+                "3) 在此聊天中发送 /bind <绑定码>\n"
+                f"渠道: {provider}"
+            )
+        return (
+            "👋 欢迎使用 Poco！请先把此 IM 账号绑定到您的 Poco 用户：\n"
+            "1) 打开 Poco Web 端，进入 Settings → Connected Accounts\n"
+            "2) 生成一个绑定码\n"
+            "3) 在此聊天中发送 /bind <绑定码>\n"
+            "⚠️ 管理员尚未配置 FRONTEND_PUBLIC_URL，请联系管理员提供入口。"
+        )
+
+    @staticmethod
+    def _server_join_prompt_text(channel: Channel) -> str:
+        return (
+            f"本群已绑定到 Poco Server ({channel.server_id})，"
+            "但您不是该 Server 的成员。请联系 Server admin 邀请您加入，"
+            "或发送 /unbind 解除绑定。"
+        )
+
+    @staticmethod
+    def _is_active_server_member(
+        db: Session, server_id: uuid.UUID, user_id: str
+    ) -> bool:
+        from app.repositories.server_member_repository import (
+            ServerMemberRepository,
+        )
+        from app.repositories.server_repository import ServerRepository
+
+        # A soft-deleted server must not grant access. The
+        # ServerRepository default already filters is_deleted, but
+        # being explicit here protects against future callers that
+        # pass include_deleted=True.
+        server = ServerRepository.get_by_id(db, server_id)
+        if server is None:
+            return False
+        membership = ServerMemberRepository.get_by_server_and_user(
+            db, server_id, user_id
+        )
+        return membership is not None and membership.status == "active"
 
     def _register_inbound_dedup(self, db: Session, *, key: str) -> bool:
         row = DedupRepository.create(db, key=key)
@@ -808,6 +1278,8 @@ class InboundMessageService:
         *,
         provider: str,
         destination: str,
+        owner_user_id: str,
+        chat_type: str,
     ) -> Channel:
         existing = ChannelRepository.get_by_provider_destination(
             db,
@@ -818,7 +1290,11 @@ class InboundMessageService:
             return existing
 
         channel = ChannelRepository.create(
-            db, provider=provider, destination=destination
+            db,
+            provider=provider,
+            destination=destination,
+            owner_user_id=owner_user_id,
+            chat_type=chat_type,
         )
         try:
             with db.begin_nested():
@@ -833,6 +1309,25 @@ class InboundMessageService:
                 return existing
             raise
         return channel
+
+    @staticmethod
+    def _ensure_channel_member(db: Session, *, channel_id: int, user_id: str) -> None:
+        from app.repositories.im import ChannelMemberRepository
+
+        existing = ChannelMemberRepository.get_by_channel_and_user(
+            db, channel_id=channel_id, user_id=user_id
+        )
+        if existing is not None:
+            return
+        try:
+            with db.begin_nested():
+                ChannelMemberRepository.create(
+                    db, channel_id=channel_id, user_id=user_id, role="member"
+                )
+                db.flush()
+        except IntegrityError:
+            # Concurrent insert: that's fine, the row is there.
+            db.rollback()
 
     def _resolve_send_address(
         self,
@@ -878,19 +1373,23 @@ class BackendEventService:
         self.gateway = NotificationGateway()
 
     async def process_event(self, db: Session, *, event: ImBackendEvent) -> int:
-        expected_user_id = (
-            self.settings.backend_user_id.strip() or "default"
-            if self.settings.backend_user_id
-            else "default"
-        )
-        if event.user_id != expected_user_id:
+        # Sanity: ignore events with empty/invalid user_id. The user_id is
+        # carried in the event payload, set from session.user_id, and must
+        # always resolve to a real Poco user. Defense-in-depth check.
+        if not event.user_id or not event.user_id.strip():
+            logger.warning(
+                "im_event_dropped_empty_user",
+                extra={"event_type": event.type, "event_id": event.id},
+            )
             return 0
 
         session_id = event.session.id.strip()
         if not session_id:
             return 0
 
-        target_channel_ids = self._get_target_channel_ids(db, session_id=session_id)
+        target_channel_ids = self._get_target_channel_ids(
+            db, session_id=session_id, event_user_id=event.user_id
+        )
         if not target_channel_ids:
             return 0
 
@@ -1001,20 +1500,60 @@ class BackendEventService:
         except IntegrityError:
             return
 
-    def _get_target_channel_ids(self, db: Session, *, session_id: str) -> set[int]:
+    def _get_target_channel_ids(
+        self, db: Session, *, session_id: str, event_user_id: str
+    ) -> set[int]:
+        """Compute the channels that should receive events for ``session_id``.
+
+        Multi-user ACL:
+        - ``subscribe_all`` channels are only included when their
+          ``owner_user_id`` matches ``event_user_id`` (no cross-user
+          broadcast).
+        - Watch/active channels are only included when their
+          ``owner_user_id`` matches ``event_user_id`` OR they are bound
+          to a Poco server of which ``event_user_id`` is an active
+          member (shared-session model).
+        """
         target: set[int] = set()
 
         for channel in ChannelRepository.list_enabled(db):
-            if channel.subscribe_all:
+            if channel.subscribe_all and channel.owner_user_id == event_user_id:
                 target.add(channel.id)
 
+        candidate_ids: set[int] = set()
         for watch in WatchRepository.list_by_session(db, session_id=session_id):
-            target.add(watch.channel_id)
-
+            candidate_ids.add(watch.channel_id)
         for active in ActiveSessionRepository.list_by_session(
             db, session_id=session_id
         ):
-            target.add(active.channel_id)
+            candidate_ids.add(active.channel_id)
+
+        from app.repositories.server_member_repository import (
+            ServerMemberRepository,
+        )
+
+        for channel_id in candidate_ids:
+            channel = ChannelRepository.get_by_id(db, channel_id=channel_id)
+            if channel is None or not channel.enabled:
+                continue
+            if channel.owner_user_id == event_user_id:
+                target.add(channel.id)
+                continue
+            if channel.server_id is not None:
+                # Defense in depth: a soft-deleted Poco server must not
+                # keep routing events to its old bound channels. We
+                # import here to avoid a circular import at module
+                # load time.
+                from app.repositories.server_repository import ServerRepository
+
+                server = ServerRepository.get_by_id(db, channel.server_id)
+                if server is None:
+                    continue
+                membership = ServerMemberRepository.get_by_server_and_user(
+                    db, channel.server_id, event_user_id
+                )
+                if membership is not None and membership.status == "active":
+                    target.add(channel.id)
 
         return target
 
@@ -1330,6 +1869,64 @@ def _log_background_task_exception(task: asyncio.Task[None]) -> None:
         task.result()
     except Exception:
         logger.exception("embedded_session_title_generation_failed")
+
+
+def _build_memory_config(channel: Channel) -> dict[str, Any]:
+    """Compute the TaskConfig memory block for an inbound message.
+
+    Bound server channels share a single Agent session and a server-wide
+    memory zone, so the per-task memory scope is widened to ``"both"``;
+    unbound channels use the default user-only scope.
+    """
+    if channel.server_id is not None:
+        return {
+            "memory_scope": "both",
+            "memory_server_id": str(channel.server_id),
+        }
+    return {}
+
+
+def _format_feishu_login_url(destination: str | None) -> str | None:
+    """Deprecated Feishu OAuth entry URL.
+
+    Retained only as a fallback for ``_format_settings_url`` when the
+    operator has explicitly configured a Feishu-only OAuth link; the
+    canonical flow is the settings page binding code below.
+    """
+    from urllib.parse import urlencode
+
+    settings = get_settings()
+    base = (settings.feishu_oauth_login_url or "").strip()
+    if not base:
+        return None
+    clean_destination = (destination or "").strip()
+    if not clean_destination:
+        return base
+    separator = "&" if ("?" in base) else "?"
+    params = urlencode({"next_chat": clean_destination})
+    return f"{base}{separator}{params}"
+
+
+def _format_settings_url(destination: str | None) -> str | None:
+    """Build the Web Settings → Connected Accounts URL.
+
+    Falls back to the legacy Feishu OAuth URL if it has been
+    explicitly configured, so operators who haven't built the
+    Settings page yet can still get users onboarded.
+    """
+    settings = get_settings()
+    base = (settings.frontend_public_url or "").strip().rstrip("/")
+    if not base:
+        return _format_feishu_login_url(destination)
+    lng = (settings.frontend_default_language or "zh").strip() or "zh"
+    url = f"{base}/{lng}/settings/connected-accounts"
+    clean_destination = (destination or "").strip()
+    if not clean_destination:
+        return url
+    from urllib.parse import urlencode
+
+    separator = "&" if ("?" in url) else "?"
+    return f"{url}{separator}{urlencode({'next_chat': clean_destination})}"
 
 
 def _normalize_status(status: str | None) -> str:

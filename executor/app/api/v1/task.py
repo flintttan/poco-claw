@@ -70,6 +70,12 @@ async def run_task(req: TaskRun, background_tasks: BackgroundTasks) -> dict:
             base_url=base_url,
             session_id=req.session_id,
             callback_token=req.callback_token,
+            memory_scope=req.config.memory_scope,
+            memory_server_id=(
+                str(req.config.memory_server_id)
+                if req.config.memory_server_id
+                else None
+            ),
         )
         if req.config.memory_enabled
         else None

@@ -16,6 +16,16 @@ except ImportError:
 DEFAULT_MEMORY_AGENT_ID = "poco-agent"
 
 
+def _server_app_id(server_id: Any) -> str:
+    """Stable mem0 ``app_id`` for a Poco server's shared memory zone.
+
+    The ``poco-server:`` prefix namespaces the value so we never
+    collide with whatever ``app_id`` mem0 may emit on its own, and
+    makes it easy to grep / count via mem0's metadata filters.
+    """
+    return f"poco-server:{server_id}"
+
+
 class MemoryService:
     def __init__(self) -> None:
         self.settings = get_settings()
@@ -207,14 +217,36 @@ class MemoryService:
             self._instance = None
 
     def create_memories(self, *, user_id: str, request: MemoryCreateRequest) -> Any:
-        params = self._build_scope(
-            user_id=user_id,
-            run_id=request.run_id,
-        )
-        if request.metadata is not None:
-            params["metadata"] = request.metadata
         messages = [message.model_dump() for message in request.messages]
-        return self._get_instance().add(messages=messages, **params)
+        scope = (request.memory_scope or "user").strip().lower() or "user"
+        server_id = request.memory_server_id
+
+        user_payload = self._build_scope(user_id=user_id, run_id=request.run_id)
+        if request.metadata is not None:
+            user_payload["metadata"] = dict(request.metadata)
+
+        if scope == "user" or server_id is None:
+            # Default path: per-user memory. Mem0 already isolates by
+            # user_id at the storage layer.
+            return self._get_instance().add(messages=messages, **user_payload)
+
+        if scope == "server":
+            # Server-zone write: tag the record with the server's
+            # app_id and drop the user_id so the search filter
+            # ``{"app_id": "poco-server:<id>"}`` actually matches.
+            server_payload = dict(user_payload)
+            server_payload.pop("user_id", None)
+            server_payload["app_id"] = _server_app_id(server_id)
+            return self._get_instance().add(messages=messages, **server_payload)
+
+        # scope == "both": fan out into two writes so a future
+        # scope="both" search can OR them back together.
+        server_payload = dict(user_payload)
+        server_payload.pop("user_id", None)
+        server_payload["app_id"] = _server_app_id(server_id)
+        user_result = self._get_instance().add(messages=messages, **user_payload)
+        server_result = self._get_instance().add(messages=messages, **server_payload)
+        return {"user_scope": user_result, "server_scope": server_result}
 
     def list_memories(
         self,
@@ -231,13 +263,46 @@ class MemoryService:
     def get_memory(self, memory_id: str) -> Any:
         return self._get_instance().get(memory_id)
 
-    def search_memories(self, *, user_id: str, request: MemorySearchRequest) -> Any:
+    def search_memories(
+        self,
+        *,
+        user_id: str,
+        request: MemorySearchRequest,
+        memory_scope: str | None = None,
+        memory_server_id: Any = None,
+    ) -> Any:
+        scope = (memory_scope or "user").strip().lower() or "user"
         params: dict[str, Any] = self._build_scope(
             user_id=user_id,
             run_id=request.run_id,
         )
         if request.filters is not None:
             params["filters"] = request.filters
+
+        if scope == "user" or memory_server_id is None:
+            return self._get_instance().search(query=request.query, **params)
+
+        server_filter = {"app_id": _server_app_id(memory_server_id)}
+        if scope == "server":
+            # Server-only: drop the user scope so we don't accidentally
+            # see per-user memories that don't belong to this server
+            # (mem0 AND-combines ``user_id`` with the ``app_id``
+            # filter, so leaving user_id set would hide every server
+            # memory from this caller).
+            params.pop("user_id", None)
+            existing = params.get("filters") or {}
+            params["filters"] = {**existing, **server_filter}
+            return self._get_instance().search(query=request.query, **params)
+
+        # scope == "both": merge user and server zones via OR.
+        existing = params.get("filters") or {}
+        params["filters"] = {
+            **existing,
+            "OR": [
+                {"user_id": user_id},
+                server_filter,
+            ],
+        }
         return self._get_instance().search(query=request.query, **params)
 
     def update_memory(self, *, memory_id: str, text: str) -> Any:

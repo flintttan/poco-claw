@@ -31,6 +31,8 @@ class MemoryCreateJobService:
         *,
         user_id: str,
         request: MemoryCreateRequest,
+        memory_scope: str | None = None,
+        memory_server_id: uuid.UUID | None = None,
     ) -> MemoryCreateJobEnqueueResponse:
         messages: list[dict[str, Any]] = [
             message.model_dump(mode="json") for message in request.messages
@@ -38,6 +40,13 @@ class MemoryCreateJobService:
         metadata: dict[str, Any] | None = (
             request.metadata.copy() if request.metadata is not None else None
         )
+        # Persist the scope on the metadata so the background worker
+        # passes it through when calling the memory backend.
+        if memory_scope and memory_scope != "user":
+            metadata = dict(metadata or {})
+            metadata.setdefault("memory_scope", memory_scope)
+            if memory_server_id is not None:
+                metadata.setdefault("memory_server_id", str(memory_server_id))
         job = MemoryCreateJobRepository.create(
             db,
             user_id=user_id,
@@ -99,10 +108,35 @@ class MemoryCreateJobService:
             job.error = None
             db.commit()
 
+            # Pull the scope out of the metadata dict that
+            # enqueue_create() put there. The memory service needs
+            # these as first-class fields to do the right thing in
+            # mem0 (otherwise server-scope writes silently degrade
+            # to user-scope).
+            memory_scope: str | None = None
+            memory_server_id: uuid.UUID | None = None
+            raw_meta = job.request_metadata or {}
+            if isinstance(raw_meta, dict):
+                raw_scope = raw_meta.get("memory_scope")
+                if isinstance(raw_scope, str) and raw_scope in {
+                    "user",
+                    "server",
+                    "both",
+                }:
+                    memory_scope = raw_scope
+                raw_sid = raw_meta.get("memory_server_id")
+                if isinstance(raw_sid, str) and raw_sid.strip():
+                    try:
+                        memory_server_id = uuid.UUID(raw_sid)
+                    except ValueError:
+                        memory_server_id = None
+
             request = MemoryCreateRequest(
                 messages=job.messages,
                 run_id=job.run_id,
                 metadata=job.request_metadata,
+                memory_scope=memory_scope,
+                memory_server_id=memory_server_id,
             )
             result = self.memory_service.create_memories(
                 user_id=job.user_id, request=request

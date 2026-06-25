@@ -12,6 +12,7 @@ from app.api.v1 import (
     claude_md,
     env_vars,
     filesystem,
+    im_bindings,
     models,
     internal_claude_md,
     internal_env_vars,
@@ -112,6 +113,7 @@ api_v1_router.include_router(server_channel_artifacts.router)
 api_v1_router.include_router(server_channel_messages.router)
 api_v1_router.include_router(server_channel_tasks.router)
 api_v1_router.include_router(im.router)
+api_v1_router.include_router(im_bindings.router)
 api_v1_router.include_router(internal_claude_md.router)
 api_v1_router.include_router(internal_env_vars.router)
 api_v1_router.include_router(internal_agent_assignments.router)

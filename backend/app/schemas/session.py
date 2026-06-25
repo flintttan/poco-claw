@@ -57,6 +57,13 @@ class TaskConfig(BaseModel):
     file_references: list[FileReference] = Field(default_factory=list)
     input_file_references: list[FileReference] = Field(default_factory=list)
     skill_references: list[SkillReference] = Field(default_factory=list)
+    # Memory scope: "user" scopes memory to the current sender; "server"
+    # scopes to a Poco server (shared between all server members via
+    # bound IM channels); "both" combines them when searching.
+    memory_scope: Literal["user", "server", "both"] = "user"
+    # Required when memory_scope != "user". Identifies the Poco server
+    # whose memory zone the task should read/write.
+    memory_server_id: UUID | None = None
 
 
 class SessionCreateRequest(BaseModel):

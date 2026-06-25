@@ -8,6 +8,7 @@ import {
   HelpCircle,
   Keyboard,
   Languages,
+  Link2,
   LogOut,
   Palette,
   Sparkles,
@@ -42,6 +43,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useThemeMode, type ThemeMode } from "@/hooks/use-theme-mode";
 import { SettingsSidebar } from "@/features/settings/components/settings-sidebar";
 import { AccountSettingsTab } from "@/features/settings/components/tabs/account-settings-tab";
+import { ConnectionsSettingsTab } from "@/features/settings/components/tabs/connections-settings-tab";
 import { ShortcutsSettingsTab } from "@/features/settings/components/tabs/shortcuts-settings-tab";
 import {
   UsageSettingsTab,
@@ -194,6 +196,11 @@ export function SettingsDialog({
   const sidebarItems = React.useMemo<SettingsSidebarItem[]>(() => {
     const items: SettingsSidebarItem[] = [
       { icon: User, label: t("settings.sidebar.account"), id: "account" },
+      {
+        icon: Link2,
+        label: t("settings.sidebar.connections"),
+        id: "connections",
+      },
       { icon: Activity, label: t("settings.sidebar.usage"), id: "usage" },
       {
         icon: Keyboard,
@@ -331,6 +338,10 @@ export function SettingsDialog({
           showInlineToolbar={isMobile}
         />
       );
+    }
+
+    if (activeTab === "connections") {
+      return <ConnectionsSettingsTab />;
     }
 
     return <ShortcutsSettingsTab />;

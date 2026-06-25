@@ -142,8 +142,16 @@ class Settings(BaseSettings):
     feishu_oauth_userinfo_url: str | None = Field(
         default=None, alias="FEISHU_OAUTH_USERINFO_URL"
     )
+    # Treat the email returned by Feishu's contact API as verified.
+    # Defaults to False to prevent account-takeover via an
+    # attacker-controlled Feishu tenant that hands out a victim user's
+    # email. Operators who *know* their Feishu app is configured to
+    # guarantee verified emails can opt-in by setting
+    # FEISHU_OAUTH_EMAIL_VERIFIED=true. The IM-side resolver also
+    # requires the configured Feishu OAuth client to be present
+    # before it will attempt an email link at all.
     feishu_oauth_email_verified: bool = Field(
-        default=True, alias="FEISHU_OAUTH_EMAIL_VERIFIED"
+        default=False, alias="FEISHU_OAUTH_EMAIL_VERIFIED"
     )
     feishu_verification_token: str | None = Field(
         default=None, alias="FEISHU_VERIFICATION_TOKEN"
@@ -156,6 +164,17 @@ class Settings(BaseSettings):
     feishu_bot_open_id: str | None = Field(default=None, alias="FEISHU_BOT_OPEN_ID")
     feishu_bot_union_id: str | None = Field(default=None, alias="FEISHU_BOT_UNION_ID")
     feishu_bot_name: str | None = Field(default=None, alias="FEISHU_BOT_NAME")
+    # Multi-user Feishu auto-provision controls. When False, p2p strangers
+    # are also prompted to OAuth instead of being auto-created.
+    feishu_auto_provision_enabled: bool = Field(
+        default=True, alias="FEISHU_AUTO_PROVISION_ENABLED"
+    )
+    feishu_auto_provision_rate_limit_per_minute: int = Field(
+        default=5, alias="FEISHU_AUTO_PROVISION_RATE_LIMIT_PER_MINUTE"
+    )
+    feishu_oauth_login_url: str | None = Field(
+        default=None, alias="FEISHU_OAUTH_LOGIN_URL"
+    )
 
     s3_endpoint: str | None = Field(default=None, alias="S3_ENDPOINT")
     s3_public_endpoint: str | None = Field(default=None, alias="S3_PUBLIC_ENDPOINT")

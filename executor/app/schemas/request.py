@@ -88,6 +88,11 @@ class TaskConfig(BaseModel):
     input_files: list[InputFile] = Field(default_factory=list)
     file_references: list[dict[str, Any]] = Field(default_factory=list)
     input_file_references: list[dict[str, Any]] = Field(default_factory=list)
+    # Memory scope ("user" | "server" | "both") and the Poco server id
+    # that scopes "server"/"both" reads and writes. Threaded through
+    # to the Memory MCP server by the executor.
+    memory_scope: str = "user"
+    memory_server_id: UUID | None = None
 
 
 class TaskRun(BaseModel):

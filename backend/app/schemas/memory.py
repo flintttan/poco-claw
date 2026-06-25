@@ -35,6 +35,17 @@ class MemoryCreateRequest(BaseModel):
     )
     run_id: str | None = None
     metadata: dict[str, Any] | None = None
+    # Optional multi-tenant scope:
+    # - "user" (default): per-sender zone, written under the
+    #   caller's user_id.
+    # - "server": Poco server zone, written under
+    #   ``app_id=f"server:{memory_server_id}"`` so the memory backend
+    #   can index it for cross-user shared search.
+    # - "both": two writes are produced — one user-scope and one
+    #   server-scope — so future searches with scope="both" can
+    #   merge them via an OR filter.
+    memory_scope: str | None = None
+    memory_server_id: uuid.UUID | None = None
 
 
 class MemorySearchRequest(BaseModel):
@@ -64,6 +75,11 @@ class InternalMemoryCreateRequest(BaseModel):
         description="Conversation messages used to extract and store memories.",
     )
     metadata: dict[str, Any] | None = None
+    # Optional multi-tenant scope: "user" (default), "server" (Poco
+    # server zone) or "both" (combine). Only honored when the session
+    # is anchored to a Poco server via a bound IM channel.
+    memory_scope: str | None = None
+    memory_server_id: uuid.UUID | None = None
 
 
 class InternalMemorySearchRequest(BaseModel):
@@ -71,6 +87,8 @@ class InternalMemorySearchRequest(BaseModel):
 
     query: str = Field(..., description="Search query.")
     filters: dict[str, Any] | None = None
+    memory_scope: str | None = None
+    memory_server_id: uuid.UUID | None = None
 
 
 class InternalMemoryUpdateRequest(BaseModel):
@@ -81,6 +99,8 @@ class InternalMemoryUpdateRequest(BaseModel):
         default=None,
         description="Optional metadata for update operations.",
     )
+    memory_scope: str | None = None
+    memory_server_id: uuid.UUID | None = None
 
 
 class MemoryCreateJobEnqueueResponse(BaseModel):

@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 import logging
 import uuid
+from collections.abc import Callable
 from zoneinfo import ZoneInfo
 
 from sqlalchemy.orm import Session
@@ -338,9 +339,31 @@ class TaskService:
         return schedule_mode, scheduled_at
 
     def enqueue_task(
-        self, db: Session, user_id: str, request: TaskEnqueueRequest
+        self,
+        db: Session,
+        user_id: str,
+        request: TaskEnqueueRequest,
+        *,
+        server_acl_check: Callable[[uuid.UUID, str], bool] | None = None,
+        shared_server_id: uuid.UUID | None = None,
     ) -> TaskEnqueueResponse:
-        """Enqueue a new run for a session (create session if needed)."""
+        """Enqueue a new run for a session (create session if needed).
+
+        ``user_id`` is always the current caller (whoever is initiating
+        the run). When a caller is interacting with a session they don't
+        own (the "shared session" model used by server-bound IM
+        channels), the caller must additionally pass
+        ``server_acl_check`` and ``shared_server_id`` so the ownership
+        check can be relaxed to "active member of the bound Poco
+        server".
+
+        The session row's ``user_id`` is *not* rewritten — the original
+        creator remains the session owner. The run's
+        ``config_snapshot`` gets a ``_trigger_user_id`` /
+        ``_session_owner_user_id`` audit pair when triggered by a
+        non-owner, so attribution is preserved without a schema
+        migration.
+        """
         session_queue_service = SessionQueueService()
         schedule_mode, scheduled_at = self._resolve_schedule(request)
 
@@ -386,9 +409,31 @@ class TaskService:
                     message=f"Session not found: {request.session_id}",
                 )
             if db_session.user_id != user_id:
-                raise AppException(
-                    error_code=ErrorCode.FORBIDDEN,
-                    message="Session does not belong to the user",
+                # Shared session: a different Poco user (caller) is
+                # allowed to drive a session they don't own when the
+                # session is bound to a Poco server and the caller is an
+                # active member of that server. The IM layer's
+                # BackendClient passes ``server_acl_check`` /
+                # ``shared_server_id`` exactly for this case; the
+                # HTTP API path does not, so behavior there is
+                # unchanged.
+                if not (
+                    shared_server_id is not None
+                    and server_acl_check is not None
+                    and server_acl_check(shared_server_id, user_id)
+                ):
+                    raise AppException(
+                        error_code=ErrorCode.FORBIDDEN,
+                        message="Session does not belong to the user",
+                    )
+                logger.info(
+                    "task_triggered_by_non_owner",
+                    extra={
+                        "session_id": str(db_session.id),
+                        "session_owner_user_id": db_session.user_id,
+                        "caller_user_id": user_id,
+                        "shared_server_id": str(shared_server_id),
+                    },
                 )
             if db_session.status == "canceling":
                 raise AppException(
@@ -475,6 +520,13 @@ class TaskService:
                 reference.model_dump(mode="json")
                 for reference in request.config.skill_references
             ]
+        # Audit: when a non-owner drives a shared session, record the
+        # original owner vs. the current caller. Underscore-prefixed
+        # keys signal "metadata, not user-tunable config" so downstream
+        # TaskConfig model validation ignores them.
+        if db_session is not None and db_session.user_id != user_id:
+            run_config_snapshot["_trigger_user_id"] = user_id
+            run_config_snapshot["_session_owner_user_id"] = db_session.user_id
         run_config_snapshot = run_config_snapshot or None
 
         if (

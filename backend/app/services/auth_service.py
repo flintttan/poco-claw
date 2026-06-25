@@ -457,6 +457,14 @@ class AuthService:
         if profile.avatar_url:
             user.avatar_url = profile.avatar_url
         user.status = "active"
+
+        # No denormalized Feishu identifiers are stored on the user
+        # record anymore. The IM gateway resolves senders -> Poco users
+        # through ``im_bindings`` (many-to-many join) populated either
+        # by an explicit /bind code or by the auth_identities auto-bind
+        # path in ``IdentityResolver``. The OAuth profile_json still
+        # carries the Feishu union_id / open_id, available via the
+        # auth_identities join when needed.
         db.flush()
         return user
 

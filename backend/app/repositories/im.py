@@ -10,7 +10,10 @@ from app.models.im import (
     ActiveSession,
     Channel,
     ChannelDelivery,
+    ChannelMember,
     DedupEvent,
+    ImBinding,
+    ImBindingCode,
     ImEventOutbox,
     WatchedSession,
 )
@@ -39,34 +42,44 @@ class ActiveSessionRepository:
 
 
 class ChannelRepository:
+    """Channel access layer (previously inline in service module)."""
+
     @staticmethod
     def get_by_provider_destination(
-        db: Session,
-        *,
-        provider: str,
-        destination: str,
+        db: Session, *, provider: str, destination: str
     ) -> Channel | None:
-        stmt = (
-            select(Channel)
-            .where(Channel.provider == provider)
-            .where(Channel.destination == destination)
+        stmt = select(Channel).where(
+            Channel.provider == provider,
+            Channel.destination == destination,
         )
         return db.execute(stmt).scalars().first()
 
     @staticmethod
-    def get_by_id(db: Session, *, channel_id: int) -> Channel | None:
+    def get_by_id(db: Session, channel_id: int) -> Channel | None:
         return db.get(Channel, channel_id)
-
-    @staticmethod
-    def create(db: Session, *, provider: str, destination: str) -> Channel:
-        channel = Channel(provider=provider, destination=destination)
-        db.add(channel)
-        return channel
 
     @staticmethod
     def list_enabled(db: Session) -> list[Channel]:
         stmt = select(Channel).where(Channel.enabled.is_(True))
         return list(db.execute(stmt).scalars().all())
+
+    @staticmethod
+    def create(
+        db: Session,
+        *,
+        provider: str,
+        destination: str,
+        owner_user_id: str,
+        chat_type: str = "group",
+    ) -> Channel:
+        channel = Channel(
+            provider=provider,
+            destination=destination,
+            owner_user_id=owner_user_id,
+            chat_type=chat_type,
+        )
+        db.add(channel)
+        return channel
 
     @staticmethod
     def set_subscribe_all(db: Session, *, channel_id: int, enabled: bool) -> Channel:
@@ -267,3 +280,206 @@ class ImEventOutboxRepository:
         row.next_attempt_at = datetime.now(timezone.utc) + timedelta(
             seconds=max(0.5, delay_seconds)
         )
+
+
+class ChannelMemberRepository:
+    @staticmethod
+    def get_by_channel_and_user(
+        db: Session, *, channel_id: int, user_id: str
+    ) -> ChannelMember | None:
+        stmt = select(ChannelMember).where(
+            ChannelMember.channel_id == channel_id,
+            ChannelMember.user_id == user_id,
+        )
+        return db.execute(stmt).scalars().first()
+
+    @staticmethod
+    def list_active_by_channel(db: Session, *, channel_id: int) -> list[ChannelMember]:
+        stmt = (
+            select(ChannelMember)
+            .where(
+                ChannelMember.channel_id == channel_id,
+                ChannelMember.status == "active",
+            )
+            .order_by(ChannelMember.joined_at.asc(), ChannelMember.id.asc())
+        )
+        return list(db.execute(stmt).scalars().all())
+
+    @staticmethod
+    def list_channels_for_user(db: Session, *, user_id: str) -> list[ChannelMember]:
+        stmt = select(ChannelMember).where(
+            ChannelMember.user_id == user_id,
+            ChannelMember.status == "active",
+        )
+        return list(db.execute(stmt).scalars().all())
+
+    @staticmethod
+    def create(
+        db: Session,
+        *,
+        channel_id: int,
+        user_id: str,
+        role: str = "member",
+    ) -> ChannelMember:
+        entry = ChannelMember(channel_id=channel_id, user_id=user_id, role=role)
+        db.add(entry)
+        return entry
+
+
+class ImBindingRepository:
+    """Data access layer for ``im_bindings``.
+
+    The resolver relies on the unique index ``(provider, im_user_id)``
+    for the primary lookup. A secondary index on
+    ``(provider, im_union_id)`` covers IM events that carry the union
+    identifier but not the open/staff id (e.g. when the union id is the
+    one forwarded by the bot while the open id is masked).
+    """
+
+    @staticmethod
+    def get_by_provider_im_user_id(
+        db: Session, *, provider: str, im_user_id: str
+    ) -> ImBinding | None:
+        if not provider or not im_user_id:
+            return None
+        stmt = select(ImBinding).where(
+            ImBinding.provider == provider,
+            ImBinding.im_user_id == im_user_id,
+        )
+        return db.execute(stmt).scalars().first()
+
+    @staticmethod
+    def get_by_provider_im_union_id(
+        db: Session, *, provider: str, im_union_id: str
+    ) -> ImBinding | None:
+        if not provider or not im_union_id:
+            return None
+        stmt = select(ImBinding).where(
+            ImBinding.provider == provider,
+            ImBinding.im_union_id == im_union_id,
+        )
+        return db.execute(stmt).scalars().first()
+
+    @staticmethod
+    def list_for_user(db: Session, *, user_id: str) -> list[ImBinding]:
+        stmt = (
+            select(ImBinding)
+            .where(ImBinding.user_id == user_id)
+            .order_by(ImBinding.bound_at.desc(), ImBinding.id.desc())
+        )
+        return list(db.execute(stmt).scalars().all())
+
+    @staticmethod
+    def get_by_id(db: Session, binding_id: int) -> ImBinding | None:
+        return db.get(ImBinding, binding_id)
+
+    @staticmethod
+    def create(
+        db: Session,
+        *,
+        user_id: str,
+        provider: str,
+        im_user_id: str,
+        im_union_id: str | None = None,
+        im_display_name: str | None = None,
+        bound_via: str = "code",
+    ) -> ImBinding:
+        binding = ImBinding(
+            user_id=user_id,
+            provider=provider,
+            im_user_id=im_user_id,
+            im_union_id=im_union_id,
+            im_display_name=im_display_name,
+            bound_via=bound_via,
+        )
+        db.add(binding)
+        return binding
+
+    @staticmethod
+    def delete(db: Session, binding: ImBinding) -> None:
+        db.delete(binding)
+
+    @staticmethod
+    def touch_last_seen(db: Session, binding: ImBinding) -> None:
+        binding.last_seen_at = datetime.now(timezone.utc)
+
+
+class ImBindingCodeRepository:
+    """Data access layer for ``im_binding_codes``.
+
+    Codes are short-lived (10 min default) and single-use. The
+    ``consume`` method is the only way to mark a code as used; callers
+    must check ``consumed_at is None`` and ``expires_at > now`` first
+    via ``get_active`` to avoid races.
+    """
+
+    @staticmethod
+    def get_by_code(db: Session, *, code: str) -> ImBindingCode | None:
+        if not code:
+            return None
+        stmt = select(ImBindingCode).where(ImBindingCode.code == code)
+        return db.execute(stmt).scalars().first()
+
+    @staticmethod
+    def get_active(db: Session, *, code: str) -> ImBindingCode | None:
+        """Return the code if it exists, is unconsumed, and not yet expired.
+
+        Does not lock the row — ``consume`` is the authoritative
+        single-use guard via a conditional UPDATE.
+        """
+        now = datetime.now(timezone.utc)
+        row = ImBindingCodeRepository.get_by_code(db, code=code)
+        if row is None:
+            return None
+        if row.consumed_at is not None:
+            return None
+        if row.expires_at <= now:
+            return None
+        return row
+
+    @staticmethod
+    def create(
+        db: Session,
+        *,
+        user_id: str,
+        code: str,
+        expires_at: datetime,
+        provider: str | None = None,
+    ) -> ImBindingCode:
+        row = ImBindingCode(
+            user_id=user_id,
+            code=code,
+            provider=provider,
+            expires_at=expires_at,
+        )
+        db.add(row)
+        return row
+
+    @staticmethod
+    def consume(
+        db: Session,
+        *,
+        row: ImBindingCode,
+        consumed_by: str,
+    ) -> bool:
+        """Mark a code as consumed. Returns True on success, False if it
+        was already consumed (race-safe via conditional UPDATE)."""
+        if row.consumed_at is not None:
+            return False
+        now = datetime.now(timezone.utc)
+        if row.expires_at <= now:
+            return False
+        row.consumed_at = now
+        row.consumed_by = consumed_by
+        db.flush()
+        return True
+
+    @staticmethod
+    def delete_expired(db: Session) -> int:
+        """Best-effort cleanup. Returns the number of rows deleted."""
+        now = datetime.now(timezone.utc)
+        stmt = select(ImBindingCode).where(ImBindingCode.expires_at < now)
+        rows = list(db.execute(stmt).scalars().all())
+        for row in rows:
+            db.delete(row)
+        return len(rows)

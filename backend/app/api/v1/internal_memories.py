@@ -41,6 +41,8 @@ async def create_memories_internal(
         db,
         user_id=user_id,
         request=memory_request,
+        memory_scope=request.memory_scope,
+        memory_server_id=request.memory_server_id,
     )
     background_tasks.add_task(
         memory_create_job_service.process_create_job,
@@ -92,7 +94,12 @@ async def search_memories_internal(
         query=request.query,
         filters=request.filters,
     )
-    result = memory_service.search_memories(user_id=user_id, request=search_request)
+    result = memory_service.search_memories(
+        user_id=user_id,
+        request=search_request,
+        memory_scope=request.memory_scope,
+        memory_server_id=request.memory_server_id,
+    )
     return Response.success(data=result, message="Memories searched successfully")
 
 

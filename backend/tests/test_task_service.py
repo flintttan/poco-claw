@@ -141,5 +141,138 @@ class TaskServiceTests(unittest.TestCase):
         self.assertEqual(result.session_id, session_id)
 
 
+class TaskServiceSharedSessionTests(unittest.TestCase):
+    """B1 fix: ``enqueue_task`` must allow a non-owner to drive a
+    session they don't own when the session is bound to a Poco server
+    and the caller is an active member of that server. Without
+    ``server_acl_check`` + ``shared_server_id``, behavior is identical
+    to before (hard reject)."""
+
+    def setUp(self) -> None:
+        self.service = TaskService()
+        self.db = MagicMock()
+        self.user_id = "u-caller"
+        self.session_id = uuid4()
+        self.server_id = uuid4()
+        # The session is owned by user-A, but our caller is user-B.
+        self.session_owner = "u-owner"
+
+    def _build_session(self) -> MagicMock:
+        session = MagicMock()
+        session.id = self.session_id
+        session.user_id = self.session_owner
+        session.project_id = None
+        session.kind = "chat"
+        session.status = "idle"
+        session.config_snapshot = {}
+        return session
+
+    @patch("app.services.task_service.SessionQueueService")
+    @patch("app.services.task_service.RunRepository.get_blocking_by_session")
+    @patch("app.services.task_service.SessionRepository.get_by_id_for_update")
+    def test_server_member_passes_ownership_check(
+        self,
+        get_session_by_id_for_update: MagicMock,
+        get_blocking_by_session: MagicMock,
+        session_queue_service_cls: MagicMock,
+    ) -> None:
+        session = self._build_session()
+        get_session_by_id_for_update.return_value = session
+        get_blocking_by_session.return_value = None
+        session_queue_service = session_queue_service_cls.return_value
+        session_queue_service.get_existing_enqueue_response.return_value = None
+
+        run_id = uuid4()
+        session_queue_service.materialize_run.return_value = (
+            MagicMock(id=uuid4()),
+            MagicMock(id=run_id, status="queued"),
+        )
+        session_queue_service.count_active_items.return_value = 0
+
+        acl_calls: list[tuple[object, str]] = []
+
+        def acl_check(server_id, user_id):
+            acl_calls.append((server_id, user_id))
+            return user_id == self.user_id
+
+        result = self.service.enqueue_task(
+            self.db,
+            self.user_id,
+            TaskEnqueueRequest(prompt="hi", session_id=self.session_id),
+            server_acl_check=acl_check,
+            shared_server_id=self.server_id,
+        )
+
+        # ACL check must have been consulted.
+        self.assertEqual(acl_calls, [(self.server_id, self.user_id)])
+        # Materialize should have been called with an audit payload
+        # that records who actually triggered the run vs. who owns it.
+        materialize_kwargs = session_queue_service.materialize_run.call_args.kwargs
+        run_config_snapshot = materialize_kwargs["run_config_snapshot"]
+        self.assertEqual(run_config_snapshot["_trigger_user_id"], self.user_id)
+        self.assertEqual(
+            run_config_snapshot["_session_owner_user_id"], self.session_owner
+        )
+        self.assertEqual(result.session_id, self.session_id)
+
+    @patch("app.services.task_service.SessionQueueService")
+    @patch("app.services.task_service.RunRepository.get_blocking_by_session")
+    @patch("app.services.task_service.SessionRepository.get_by_id_for_update")
+    def test_non_server_member_blocked(
+        self,
+        get_session_by_id_for_update: MagicMock,
+        get_blocking_by_session: MagicMock,
+        session_queue_service_cls: MagicMock,
+    ) -> None:
+        from app.core.errors.exceptions import AppException
+
+        session = self._build_session()
+        get_session_by_id_for_update.return_value = session
+        get_blocking_by_session.return_value = None
+
+        def acl_check(server_id, user_id):
+            return False  # deny all
+
+        with self.assertRaises(AppException) as ctx:
+            self.service.enqueue_task(
+                self.db,
+                self.user_id,
+                TaskEnqueueRequest(prompt="hi", session_id=self.session_id),
+                server_acl_check=acl_check,
+                shared_server_id=self.server_id,
+            )
+
+        self.assertIn("Session does not belong to the user", str(ctx.exception))
+
+    @patch("app.services.task_service.SessionQueueService")
+    @patch("app.services.task_service.RunRepository.get_blocking_by_session")
+    @patch("app.services.task_service.SessionRepository.get_by_id_for_update")
+    def test_no_acl_check_defaults_to_hard_reject(
+        self,
+        get_session_by_id_for_update: MagicMock,
+        get_blocking_by_session: MagicMock,
+        session_queue_service_cls: MagicMock,
+    ) -> None:
+        """Backwards compat: HTTP API path passes neither param, so
+        a non-owner driving a foreign session still gets rejected
+        (today's behavior must not regress)."""
+
+        from app.core.errors.exceptions import AppException
+
+        session = self._build_session()
+        get_session_by_id_for_update.return_value = session
+        get_blocking_by_session.return_value = None
+
+        with self.assertRaises(AppException) as ctx:
+            self.service.enqueue_task(
+                self.db,
+                self.user_id,
+                TaskEnqueueRequest(prompt="hi", session_id=self.session_id),
+                # server_acl_check + shared_server_id are NOT passed
+            )
+
+        self.assertIn("Session does not belong to the user", str(ctx.exception))
+
+
 if __name__ == "__main__":
     unittest.main()

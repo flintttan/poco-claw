@@ -14,6 +14,17 @@ class InboundMessage:
     sender_id: str | None = None
     send_address: str | None = None
     raw: dict[str, Any] | None = None
+    # "p2p" (1:1 with the bot) or "group" (multi-user chat). Used by the
+    # identity resolver to decide between auto-provision and OAuth prompt.
+    chat_type: str = "group"
+    # Feishu/Lark identifier preferences. The auth resolver tries
+    # union_id first, then open_id.
+    sender_open_id: str | None = None
+    sender_union_id: str | None = None
+    # If the provider includes the sender's verified email (rare on IM
+    # webhooks, but possible on Slack-like providers), helps the
+    # resolver link to an existing account.
+    sender_email: str | None = None
 
 
 class SessionSnapshot(BaseModel):

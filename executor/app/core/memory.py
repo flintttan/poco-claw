@@ -24,11 +24,21 @@ class MemoryClient:
         session_id: str,
         callback_token: str = "",
         timeout: float = 10.0,
+        memory_scope: str = "user",
+        memory_server_id: str | None = None,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.session_id = session_id
         self.callback_token = callback_token
         self.timeout = timeout
+        # "user" (per-sender) | "server" (Poco server zone) | "both" (merge).
+        # Only meaningful when the bound IM channel is server-anchored;
+        # the memory MCP tools attach this to every request so the
+        # backend knows which zone to read or write.
+        self.memory_scope = (memory_scope or "user").strip().lower() or "user"
+        self.memory_server_id = (
+            str(memory_server_id).strip() if memory_server_id else None
+        ) or None
 
     def _headers(self) -> dict[str, str]:
         headers = {
@@ -39,6 +49,14 @@ class MemoryClient:
             headers["Authorization"] = f"Bearer {self.callback_token}"
         return headers
 
+    def _scope_params(self) -> dict[str, str]:
+        params: dict[str, str] = {}
+        if self.memory_scope and self.memory_scope != "user":
+            params["memory_scope"] = self.memory_scope
+        if self.memory_server_id and self.memory_scope in {"server", "both"}:
+            params["memory_server_id"] = self.memory_server_id
+        return params
+
     async def _request(
         self,
         method: str,
@@ -47,11 +65,13 @@ class MemoryClient:
         params: dict[str, Any] | None = None,
         json_body: dict[str, Any] | None = None,
     ) -> Any:
+        merged_params: dict[str, Any] = dict(params or {})
+        merged_params.update(self._scope_params())
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             response = await client.request(
                 method=method,
                 url=f"{self.base_url}{path}",
-                params=params,
+                params=merged_params,
                 json=json_body,
                 headers=self._headers(),
             )

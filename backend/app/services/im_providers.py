@@ -395,6 +395,66 @@ class FeishuClient:
             text=text,
         )
 
+    async def get_user(
+        self,
+        *,
+        open_id: str,
+        user_id_type: str = "open_id",
+    ) -> dict[str, Any] | None:
+        """Fetch a user's public profile via contact API.
+
+        Returns a dict like ``{"open_id": ..., "union_id": ...,
+        "user_id": ..., "email": ..., "name": ..., "avatar_url": ...}``
+        on success, or ``None`` if the call fails (caller decides whether
+        to fall back to OAuth prompt).
+
+        Requires the bot to have ``contact:user.id:readonly`` scope.
+        """
+        if not self.enabled or not open_id:
+            return None
+        try:
+            token = await self._get_tenant_access_token()
+        except Exception:
+            logger.exception("feishu_get_user_auth_error")
+            return None
+
+        url = f"{self._base_url}/open-apis/contact/v3/users/{open_id}"
+        headers = {"Authorization": f"Bearer {token}"}
+        async with httpx.AsyncClient(
+            timeout=httpx.Timeout(10.0, connect=5.0)
+        ) as client:
+            try:
+                resp = await client.get(
+                    url,
+                    params={"user_id_type": user_id_type},
+                    headers=headers,
+                )
+            except Exception:
+                logger.exception("feishu_get_user_request_error")
+                return None
+
+        if not resp.is_success:
+            logger.warning(
+                "feishu_get_user_http_error",
+                extra={"status_code": resp.status_code, "open_id": open_id},
+            )
+            return None
+        try:
+            data = resp.json()
+        except Exception:
+            return None
+        if not isinstance(data, dict):
+            return None
+        code = int(data.get("code") or 0)
+        if code != 0:
+            logger.warning(
+                "feishu_get_user_api_error",
+                extra={"code": code, "msg": data.get("msg"), "open_id": open_id},
+            )
+            return None
+        user = data.get("data")
+        return user if isinstance(user, dict) else None
+
 
 class NotificationGateway:
     def __init__(self) -> None:
@@ -454,6 +514,11 @@ def parse_telegram_update(payload: dict[str, Any]) -> InboundMessage | None:
         if raw_sender_id is not None:
             sender_id = str(raw_sender_id)
 
+    chat_type_raw = str(chat.get("type") or "").strip().lower()
+    chat_type = (
+        "p2p" if chat_type_raw == "private" else "group" if chat_type_raw else "group"
+    )
+
     return InboundMessage(
         provider="telegram",
         destination=str(chat_id),
@@ -461,6 +526,10 @@ def parse_telegram_update(payload: dict[str, Any]) -> InboundMessage | None:
         sender_id=sender_id,
         text=text,
         raw=payload,
+        chat_type=chat_type,
+        sender_open_id=sender_id,
+        sender_union_id=None,
+        sender_email=None,
     )
 
 
@@ -515,6 +584,11 @@ def parse_dingtalk_webhook_event(payload: dict[str, Any]) -> InboundMessage | No
         or None
     )
 
+    # DingTalk conversationType: "1" = direct (p2p), "2" = group.
+    dingtalk_chat_type = (
+        "p2p" if conversation_type == "1" else "group" if conversation_type else "group"
+    )
+
     return InboundMessage(
         provider="dingtalk",
         destination=destination,
@@ -523,6 +597,10 @@ def parse_dingtalk_webhook_event(payload: dict[str, Any]) -> InboundMessage | No
         sender_id=sender_id,
         text=text,
         raw=payload,
+        chat_type=dingtalk_chat_type,
+        sender_open_id=sender_id,
+        sender_union_id=None,
+        sender_email=None,
     )
 
 
@@ -630,6 +708,10 @@ def _build_feishu_inbound(
         sender_id=_extract_feishu_sender_id(sender),
         text=text,
         raw=raw,
+        chat_type=chat_type or "group",
+        sender_open_id=_extract_feishu_specific_sender_id(sender, "open_id"),
+        sender_union_id=_extract_feishu_specific_sender_id(sender, "union_id"),
+        sender_email=_extract_feishu_sender_email(sender),
     )
 
 
@@ -666,6 +748,37 @@ def _extract_feishu_sender_id(sender: Any) -> str | None:
         if isinstance(value, str) and value.strip():
             return value.strip()
 
+    return None
+
+
+def _extract_feishu_specific_sender_id(sender: Any, key: str) -> str | None:
+    """Read a specific identifier (open_id / union_id / user_id) from the
+    Feishu sender block. Used by the identity resolver to look up Poco
+    users via auth_identities.
+    """
+    sender_id = _read_field(sender, "sender_id")
+    for source in (sender_id, sender):
+        value = _read_field(source, key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
+
+
+def _extract_feishu_sender_email(sender: Any) -> str | None:
+    """Feishu event payloads don't include sender email by default, but the
+    field may appear on some events. Return it if present so the identity
+    resolver can link to an existing account.
+    """
+    if not isinstance(sender, dict):
+        return None
+    value = sender.get("email")
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    sender_id = sender.get("sender_id")
+    if isinstance(sender_id, dict):
+        value = sender_id.get("email")
+        if isinstance(value, str) and value.strip():
+            return value.strip()
     return None
 
 
