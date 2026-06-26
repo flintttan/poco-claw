@@ -7,6 +7,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from app.schemas.user_profile import UserPublicProfileResponse
+
 
 class BindingCodeCreateRequest(BaseModel):
     provider: Literal["feishu", "dingtalk", "telegram"] | None = Field(
@@ -46,3 +48,8 @@ class ServerImChannelResponse(BaseModel):
     enabled: bool
     last_bound_by_user_id: str | None = None
     last_bound_at: datetime | None = None
+    last_bound_by_user: UserPublicProfileResponse | None = None
+
+
+class ServerImChannelUpdateRequest(BaseModel):
+    enabled: bool

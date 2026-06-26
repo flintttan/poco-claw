@@ -104,14 +104,31 @@
       "title": "Linked IM chats",
       "subtitle": "IM chats currently bound to this server. Messages sent in these chats will reach Poco on behalf of the bound members.",
       "empty": "No IM chats are bound to this server yet.",
+      "loading": "Loading…",
       "loadError": "Failed to load bound IM chats.",
       "retry": "Retry",
       "enabled": "active",
       "disabled": "paused",
       "group": "group",
       "p2p": "1:1",
+      "manageHint": "Admins can pause delivery to a chat or remove the server binding entirely.",
       "boundBy": "bound by",
-      "boundAt": "bound"
+      "boundAt": "bound",
+      "pause": "Pause",
+      "resume": "Resume",
+      "unbind": "Unbind",
+      "pauseSuccess": "IM chat paused.",
+      "resumeSuccess": "IM chat resumed.",
+      "unbindSuccess": "IM chat unbound from the server.",
+      "unbindTitle": "Remove linked IM chat?",
+      "unbindDescription": "This removes the server binding for the selected IM chat. Members in that chat will stop using this server until it is linked again from IM.",
+      "confirmUnbind": "Remove binding",
+      "actionError": "Failed to update linked IM chat.",
+      "providers": {
+        "feishu": "Feishu",
+        "dingtalk": "DingTalk",
+        "telegram": "Telegram"
+      }
     }
   },
   "channelTasks": {

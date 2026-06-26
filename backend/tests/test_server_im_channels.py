@@ -1,16 +1,7 @@
-"""Tests for the server-scoped IM channels endpoint.
-
-Mounted at ``GET /api/v1/servers/{server_id}/im-channels``. Used by
-the server-detail page to populate the "Linked IM chats" panel.
-"""
+"""Tests for the server-scoped IM channels API and service."""
 
 from __future__ import annotations
 
-# Provide S3 env stubs before importing any module that initialises
-# ``S3StorageService`` (transitively imported via ``app.api.v1``).
-# We only need the endpoint function, but Python resolves its
-# parent package before letting us import it, which triggers
-# ``app.api.v1/__init__.py`` → many submodules → S3StorageService.
 import os
 
 os.environ.setdefault("S3_BUCKET", "test-bucket")
@@ -28,16 +19,16 @@ from app.core.errors.exceptions import AppException
 from app.core.settings import get_settings
 from app.models.im import Channel
 from app.models.server import Server
-from app.models.server_member import ServerMember
 from app.models.user import User
+from app.schemas.im_binding import ServerImChannelUpdateRequest
+from app.schemas.user_profile import UserPublicProfileResponse
+from app.services.server_im_channel_service import ServerImChannelService
 
-
-# Import the endpoint function without triggering the full
-# ``app.api.v1`` package init (which would pull in modules that
-# require live S3 credentials). We load the submodule directly.
 get_settings.cache_clear()
-_module = importlib.import_module("app.api.v1.server_im_channels")
-list_server_im_channels = _module.list_server_im_channels
+_api_module = importlib.import_module("app.api.v1.server_im_channels")
+list_server_im_channels = _api_module.list_server_im_channels
+update_server_im_channel = _api_module.update_server_im_channel
+unbind_server_im_channel = _api_module.unbind_server_im_channel
 
 
 def _user(user_id: str = "u-mine") -> User:
@@ -54,6 +45,7 @@ def _channel(
     destination: str = "oc-test",
     chat_type: str = "group",
     enabled: bool = True,
+    last_bound_by_user_id: str | None = "u-owner",
 ) -> Channel:
     channel = MagicMock(spec=Channel)
     channel.id = channel_id
@@ -62,15 +54,9 @@ def _channel(
     channel.destination = destination
     channel.chat_type = chat_type
     channel.enabled = enabled
-    channel.last_bound_by_user_id = None
+    channel.last_bound_by_user_id = last_bound_by_user_id
     channel.last_bound_at = None
     return channel
-
-
-def _membership(*, status: str = "active") -> ServerMember:
-    m = MagicMock(spec=ServerMember)
-    m.status = status
-    return m
 
 
 def _server(server_id: uuid.UUID) -> Server:
@@ -80,100 +66,190 @@ def _server(server_id: uuid.UUID) -> Server:
     return server
 
 
+def _profile(user_id: str, display_name: str = "Owner") -> UserPublicProfileResponse:
+    return UserPublicProfileResponse(user_id=user_id, display_name=display_name)
+
+
 class ListServerImChannelsEndpointTests(unittest.IsolatedAsyncioTestCase):
-    """Cover the API endpoint that returns bound channels for a server."""
-
-    async def test_member_receives_their_server_channels(self) -> None:
+    async def test_list_endpoint_returns_service_rows(self) -> None:
         server_id = uuid.uuid4()
-        channels = [
-            _channel(channel_id=10, server_id=server_id, destination="oc-a"),
-            _channel(channel_id=11, server_id=server_id, destination="oc-b"),
-        ]
-
-        db = MagicMock()
         user = _user()
+        db = MagicMock()
+        row = MagicMock()
 
-        with (
-            patch.object(_module, "ServerRepository") as server_repo_mock,
-            patch.object(_module, "ServerMemberRepository") as member_repo_mock,
-            patch.object(_module, "ChannelRepository") as channel_repo_mock,
-        ):
-            server_repo_mock.get_by_id.return_value = _server(server_id)
-            member_repo_mock.get_by_server_and_user.return_value = _membership()
-            channel_repo_mock.list_by_server.return_value = channels
-
+        with patch.object(_api_module, "service") as service_mock:
+            service_mock.list_channels.return_value = [row]
             response = await list_server_im_channels(
                 server_id=server_id,
                 current_user=user,
                 db=db,
             )
 
-        # Endpoint returned a JSONResponse wrapping the rows.
         self.assertIsNotNone(response)
-        channel_repo_mock.list_by_server.assert_called_once_with(
-            db, server_id=server_id
-        )
+        service_mock.list_channels.assert_called_once_with(db, user, server_id)
 
-    async def test_non_member_rejected_with_403(self) -> None:
+    async def test_update_endpoint_calls_service(self) -> None:
         server_id = uuid.uuid4()
-        db = MagicMock()
         user = _user()
-
-        with (
-            patch.object(_module, "ServerRepository") as server_repo_mock,
-            patch.object(_module, "ServerMemberRepository") as member_repo_mock,
-        ):
-            server_repo_mock.get_by_id.return_value = _server(server_id)
-            member_repo_mock.get_by_server_and_user.return_value = None
-
-            with self.assertRaises(AppException) as cm:
-                await list_server_im_channels(
-                    server_id=server_id,
-                    current_user=user,
-                    db=db,
-                )
-
-        self.assertEqual(cm.exception.error_code, ErrorCode.FORBIDDEN)
-
-    async def test_inactive_member_rejected(self) -> None:
-        server_id = uuid.uuid4()
         db = MagicMock()
-        user = _user()
+        request = ServerImChannelUpdateRequest(enabled=False)
 
-        with (
-            patch.object(_module, "ServerRepository") as server_repo_mock,
-            patch.object(_module, "ServerMemberRepository") as member_repo_mock,
-        ):
-            server_repo_mock.get_by_id.return_value = _server(server_id)
-            member_repo_mock.get_by_server_and_user.return_value = _membership(
-                status="left"
+        with patch.object(_api_module, "service") as service_mock:
+            service_mock.update_channel.return_value = MagicMock()
+            response = await update_server_im_channel(
+                server_id=server_id,
+                channel_id=7,
+                request=request,
+                current_user=user,
+                db=db,
             )
 
-            with self.assertRaises(AppException) as cm:
-                await list_server_im_channels(
-                    server_id=server_id,
-                    current_user=user,
-                    db=db,
-                )
+        self.assertIsNotNone(response)
+        service_mock.update_channel.assert_called_once_with(
+            db,
+            user,
+            server_id,
+            7,
+            request,
+        )
 
+    async def test_unbind_endpoint_calls_service(self) -> None:
+        server_id = uuid.uuid4()
+        user = _user()
+        db = MagicMock()
+
+        with patch.object(_api_module, "service") as service_mock:
+            response = await unbind_server_im_channel(
+                server_id=server_id,
+                channel_id=11,
+                current_user=user,
+                db=db,
+            )
+
+        self.assertIsNotNone(response)
+        service_mock.unbind_channel.assert_called_once_with(db, user, server_id, 11)
+
+
+class ServerImChannelServiceTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.service = ServerImChannelService()
+        self.db = MagicMock()
+        self.current_user = _user()
+
+    def test_list_requires_existing_server(self) -> None:
+        server_id = uuid.uuid4()
+        with patch(
+            "app.services.server_im_channel_service.ServerRepository.get_by_id",
+            return_value=None,
+        ):
+            with self.assertRaises(AppException) as cm:
+                self.service.list_channels(self.db, self.current_user, server_id)
+        self.assertEqual(cm.exception.error_code, ErrorCode.NOT_FOUND)
+
+    def test_list_returns_profile_enriched_rows(self) -> None:
+        server_id = uuid.uuid4()
+        channels = [
+            _channel(channel_id=1, server_id=server_id, last_bound_by_user_id="u-owner")
+        ]
+        with (
+            patch(
+                "app.services.server_im_channel_service.ServerRepository.get_by_id",
+                return_value=_server(server_id),
+            ),
+            patch("app.services.server_im_channel_service.require_server_member"),
+            patch(
+                "app.services.server_im_channel_service.ChannelRepository.list_by_server",
+                return_value=channels,
+            ),
+            patch(
+                "app.services.server_im_channel_service.list_user_public_profiles_by_id",
+                return_value={"u-owner": _profile("u-owner", "Alice")},
+            ),
+        ):
+            rows = self.service.list_channels(self.db, self.current_user, server_id)
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0].last_bound_by_user_id, "u-owner")
+        self.assertIsNotNone(rows[0].last_bound_by_user)
+        self.assertEqual(rows[0].last_bound_by_user.display_name, "Alice")
+
+    def test_update_requires_admin(self) -> None:
+        server_id = uuid.uuid4()
+        with (
+            patch(
+                "app.services.server_im_channel_service.ServerRepository.get_by_id",
+                return_value=_server(server_id),
+            ),
+            patch(
+                "app.services.server_im_channel_service.require_server_admin",
+                side_effect=AppException(
+                    error_code=ErrorCode.FORBIDDEN,
+                    message="forbidden",
+                ),
+            ),
+        ):
+            with self.assertRaises(AppException) as cm:
+                self.service.update_channel(
+                    self.db,
+                    self.current_user,
+                    server_id,
+                    3,
+                    ServerImChannelUpdateRequest(enabled=False),
+                )
         self.assertEqual(cm.exception.error_code, ErrorCode.FORBIDDEN)
 
-    async def test_missing_server_rejected_with_404(self) -> None:
+    def test_update_changes_enabled_and_commits(self) -> None:
         server_id = uuid.uuid4()
-        db = MagicMock()
-        user = _user()
+        channel = _channel(channel_id=3, server_id=server_id, enabled=True)
+        with (
+            patch(
+                "app.services.server_im_channel_service.ServerRepository.get_by_id",
+                return_value=_server(server_id),
+            ),
+            patch("app.services.server_im_channel_service.require_server_admin"),
+            patch(
+                "app.services.server_im_channel_service.ChannelRepository.get_by_id",
+                return_value=channel,
+            ),
+            patch(
+                "app.services.server_im_channel_service.list_user_public_profiles_by_id",
+                return_value={},
+            ),
+        ):
+            row = self.service.update_channel(
+                self.db,
+                self.current_user,
+                server_id,
+                3,
+                ServerImChannelUpdateRequest(enabled=False),
+            )
 
-        with patch.object(_module, "ServerRepository") as server_repo_mock:
-            server_repo_mock.get_by_id.return_value = None
+        self.assertFalse(channel.enabled)
+        self.db.commit.assert_called_once()
+        self.db.refresh.assert_called_once_with(channel)
+        self.assertFalse(row.enabled)
 
-            with self.assertRaises(AppException) as cm:
-                await list_server_im_channels(
-                    server_id=server_id,
-                    current_user=user,
-                    db=db,
-                )
+    def test_unbind_clears_server_binding_and_commits(self) -> None:
+        server_id = uuid.uuid4()
+        channel = _channel(channel_id=8, server_id=server_id)
+        channel.last_bound_at = MagicMock()
+        with (
+            patch(
+                "app.services.server_im_channel_service.ServerRepository.get_by_id",
+                return_value=_server(server_id),
+            ),
+            patch("app.services.server_im_channel_service.require_server_admin"),
+            patch(
+                "app.services.server_im_channel_service.ChannelRepository.get_by_id",
+                return_value=channel,
+            ),
+        ):
+            self.service.unbind_channel(self.db, self.current_user, server_id, 8)
 
-        self.assertEqual(cm.exception.error_code, ErrorCode.NOT_FOUND)
+        self.assertIsNone(channel.server_id)
+        self.assertIsNone(channel.last_bound_by_user_id)
+        self.assertIsNone(channel.last_bound_at)
+        self.db.commit.assert_called_once()
 
 
 if __name__ == "__main__":

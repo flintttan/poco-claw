@@ -104,14 +104,31 @@
       "title": "已绑定的 IM 群",
       "subtitle": "当前绑定到本 Server 的 IM 聊天。这些聊天中发送的消息会以绑定成员的身份推送到 Poco。",
       "empty": "尚无 IM 聊天绑定到本 Server。",
+      "loading": "正在加载…",
       "loadError": "加载已绑定 IM 聊天失败。",
       "retry": "重试",
       "enabled": "已启用",
       "disabled": "已暂停",
       "group": "群聊",
       "p2p": "单聊",
+      "manageHint": "Server admin 可以在这里暂停投递，或直接移除该 IM 聊天与 Server 的绑定。",
       "boundBy": "绑定者",
-      "boundAt": "绑定于"
+      "boundAt": "绑定于",
+      "pause": "暂停",
+      "resume": "恢复",
+      "unbind": "解绑",
+      "pauseSuccess": "已暂停该 IM 聊天。",
+      "resumeSuccess": "已恢复该 IM 聊天。",
+      "unbindSuccess": "已从 Server 解除该 IM 聊天绑定。",
+      "unbindTitle": "移除此 IM 聊天绑定？",
+      "unbindDescription": "此操作会移除所选 IM 聊天与当前 Server 的绑定。该聊天中的成员将无法继续通过此 Server 使用 Poco，除非再次在 IM 中重新绑定。",
+      "confirmUnbind": "移除绑定",
+      "actionError": "更新已绑定 IM 聊天失败。",
+      "providers": {
+        "feishu": "飞书",
+        "dingtalk": "钉钉",
+        "telegram": "Telegram"
+      }
     }
   },
   "channelTasks": {

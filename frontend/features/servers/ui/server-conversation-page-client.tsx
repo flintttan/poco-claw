@@ -3941,7 +3941,10 @@ export function ServerConversationPageClient({
               <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background">
                 {selectedServerId ? (
                   <div className="shrink-0 px-4 pt-4 sm:px-6">
-                    <ServerImChannelsPanel serverId={selectedServerId} />
+                    <ServerImChannelsPanel
+                      serverId={selectedServerId}
+                      canManage={canManageServerOps}
+                    />
                   </div>
                 ) : null}
                 <div className="min-h-0 min-w-0 flex-1 pt-4">
