@@ -17,6 +17,7 @@ import {
   MessageSquare,
   Pause,
   Play,
+  RefreshCw,
   Unlink2,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -56,12 +57,15 @@ const FALLBACK_STRINGS = {
   loading: "Loading…",
   loadError: "Failed to load bound IM chats.",
   retry: "Retry",
+  refresh: "Refresh",
   enabled: "active",
   disabled: "paused",
   group: "group",
   p2p: "1:1",
   manageHint:
     "Admins can pause delivery to a chat or remove the server binding entirely.",
+  emptyHint:
+    "Link an IM chat from the chat itself with /server <server_id> after a server admin joins it.",
   boundAt: "bound",
   boundBy: "bound by",
   providerFeishu: "Feishu",
@@ -234,18 +238,34 @@ export function ServerImChannelsPanel({
     }
   }, [serverId, t, unbindTarget]);
 
-  const showManagementHint = useMemo(
-    () => canManage && channels.length > 0,
-    [canManage, channels.length],
-  );
+  const showManagementHint = useMemo(() => canManage, [canManage]);
 
   return (
     <>
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm">
-            {t("server.imChannels.title", FALLBACK_STRINGS.title)}
-          </CardTitle>
+          <div className="flex items-center justify-between gap-3">
+            <CardTitle className="text-sm">
+              {t("server.imChannels.title", FALLBACK_STRINGS.title)}
+            </CardTitle>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-8"
+              onClick={() => void load()}
+              disabled={isLoading || pendingChannelId !== null}
+              title={t("server.imChannels.refresh", FALLBACK_STRINGS.refresh)}
+              aria-label={t(
+                "server.imChannels.refresh",
+                FALLBACK_STRINGS.refresh,
+              )}
+            >
+              <RefreshCw
+                className={`size-4 ${isLoading ? "animate-spin" : ""}`}
+              />
+            </Button>
+          </div>
           <p className="mt-1 text-xs text-muted-foreground">
             {t("server.imChannels.subtitle", FALLBACK_STRINGS.subtitle)}
           </p>
@@ -277,9 +297,16 @@ export function ServerImChannelsPanel({
               </button>
             </div>
           ) : channels.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              {t("server.imChannels.empty", FALLBACK_STRINGS.empty)}
-            </p>
+            <div className="space-y-1">
+              <p className="text-sm text-muted-foreground">
+                {t("server.imChannels.empty", FALLBACK_STRINGS.empty)}
+              </p>
+              {canManage ? (
+                <p className="text-xs text-muted-foreground">
+                  {t("server.imChannels.emptyHint", FALLBACK_STRINGS.emptyHint)}
+                </p>
+              ) : null}
+            </div>
           ) : (
             <ul className="space-y-2">
               {channels.map((channel) => (
@@ -352,6 +379,17 @@ export function ServerImChannelsPanel({
                           size="sm"
                           disabled={isMutating(channel.id)}
                           onClick={() => void onToggleEnabled(channel)}
+                          aria-label={
+                            channel.enabled
+                              ? t(
+                                  "server.imChannels.pause",
+                                  FALLBACK_STRINGS.pause,
+                                )
+                              : t(
+                                  "server.imChannels.resume",
+                                  FALLBACK_STRINGS.resume,
+                                )
+                          }
                         >
                           {isMutating(channel.id) ? (
                             <Loader2 className="mr-2 size-4 animate-spin" />
@@ -376,6 +414,10 @@ export function ServerImChannelsPanel({
                           size="sm"
                           disabled={isMutating(channel.id)}
                           onClick={() => setUnbindTarget(channel)}
+                          aria-label={t(
+                            "server.imChannels.unbind",
+                            FALLBACK_STRINGS.unbind,
+                          )}
                         >
                           <Unlink2 className="mr-2 size-4" />
                           {t(

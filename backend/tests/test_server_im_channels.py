@@ -232,6 +232,7 @@ class ServerImChannelServiceTests(unittest.TestCase):
     def test_unbind_clears_server_binding_and_commits(self) -> None:
         server_id = uuid.uuid4()
         channel = _channel(channel_id=8, server_id=server_id)
+        channel.server_channel_id = uuid.uuid4()
         channel.last_bound_at = MagicMock()
         with (
             patch(
@@ -247,6 +248,7 @@ class ServerImChannelServiceTests(unittest.TestCase):
             self.service.unbind_channel(self.db, self.current_user, server_id, 8)
 
         self.assertIsNone(channel.server_id)
+        self.assertIsNone(channel.server_channel_id)
         self.assertIsNone(channel.last_bound_by_user_id)
         self.assertIsNone(channel.last_bound_at)
         self.db.commit.assert_called_once()
