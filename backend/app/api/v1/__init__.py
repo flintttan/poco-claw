@@ -49,6 +49,7 @@ from app.api.v1 import (
     server_channel_messages,
     server_channel_tasks,
     server_channels,
+    server_im_channels,
     server_invites,
     server_members,
     servers,
@@ -107,6 +108,7 @@ api_v1_router.include_router(server_agents.channel_router)
 api_v1_router.include_router(server_members.router)
 api_v1_router.include_router(server_invites.router)
 api_v1_router.include_router(server_invites.accept_router)
+api_v1_router.include_router(server_im_channels.router)
 api_v1_router.include_router(server_channels.router)
 api_v1_router.include_router(server_channels.dm_router)
 api_v1_router.include_router(server_channel_artifacts.router)

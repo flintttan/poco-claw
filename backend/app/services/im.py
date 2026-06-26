@@ -20,6 +20,7 @@ from app.models.agent_message import AgentMessage
 from app.models.agent_run import AgentRun
 from app.models.agent_session import AgentSession
 from app.models.im import Channel
+from app.models.server import Server
 from app.models.user_input_request import UserInputRequest
 from app.repositories.im import (
     ActiveSessionRepository,
@@ -43,11 +44,13 @@ from app.schemas.im import (
 from app.schemas.session import SessionResponse, SessionStateResponse, TaskConfig
 from app.schemas.task import TaskEnqueueRequest, TaskEnqueueResponse
 from app.schemas.user_input_request import UserInputAnswerRequest
-from app.services.identity_resolver import IdentityResolver
+from app.services.identity_resolver import IdentityResolution, IdentityResolver
+from app.services.im_log_context import event_log_context, inbound_message_log_context
 from app.services.im_providers import NotificationGateway
 from app.services.session_service import SessionService
 from app.services.session_title_service import SessionTitleService
 from app.services.task_service import TaskService
+from app.services.user_id_validation import assert_valid_user_id
 from app.services.user_input_request_service import UserInputRequestService
 
 logger = logging.getLogger(__name__)
@@ -502,7 +505,18 @@ class CommandService:
                 config=memory_config,
             )
         except BackendClientError as exc:
-            logger.warning("enqueue_task_failed", extra={"error": str(exc)})
+            logger.warning(
+                "enqueue_task_failed",
+                extra={
+                    "error": str(exc),
+                    # ``backend.user_id`` is the resolved Poco user;
+                    # include it so a single log line can answer
+                    # "who tried to do what" without correlating
+                    # against the inbound message record.
+                    "user_id": backend.user_id,
+                    "channel_id": channel.id,
+                },
+            )
             return [f"发送失败：{exc}"]
 
         session_id = str(result.get("session_id") or active.session_id)
@@ -665,9 +679,10 @@ class CommandService:
         ref = args.strip()
         if not ref:
             return ["用法：/server <server_id>"]
-        try:
-            server_id = uuid.UUID(ref)
-        except ValueError:
+        from app.services.uuid_parsing import try_parse_uuid
+
+        server_id = try_parse_uuid(ref)
+        if server_id is None:
             return ["server_id 格式错误，应为 UUID"]
 
         from app.repositories.server_member_repository import (
@@ -683,7 +698,13 @@ class CommandService:
             return ["仅 Server owner/admin 可发起 /server。"]
 
         channel.server_id = server_id
-        channel.last_bound_by_user_id = backend.user_id
+        # Defensive length check: ``Channel.last_bound_by_user_id`` is
+        # a String(255) column. ``backend.user_id`` is normally a UUID
+        # from the resolved identity, but a misconfigured OAuth path
+        # could surface an oversized value. Validate before the flush
+        # so the failure mode is a clear 400, not an opaque
+        # ``value too long`` from PostgreSQL.
+        channel.last_bound_by_user_id = assert_valid_user_id(backend.user_id)
         channel.last_bound_at = datetime.now(timezone.utc)
         db.flush()
         return [
@@ -1103,13 +1124,30 @@ class InboundMessageService:
                 if not self._register_inbound_dedup(db, key=dedup_key):
                     return
 
-            # 1) Resolve the IM sender to a Poco user_id.
-            resolution = await self._resolver.resolve(
-                db,
-                provider=message.provider,
-                sender_open_id=message.sender_open_id,
-                sender_union_id=message.sender_union_id,
-            )
+            # Feature flag: when the operator has not opted in to the
+            # multi-user path yet, fall back to the legacy single-user
+            # behaviour. The legacy path attributes every inbound
+            # message to ``settings.backend_user_id`` and skips the
+            # resolver entirely. This is the gray-scale switch that
+            # lets a deployment roll forward / roll back without a
+            # code change.
+            settings = get_settings()
+            if not settings.im_multiuser_enabled:
+                user_id = settings.backend_user_id
+                resolution = IdentityResolution(
+                    user_id=user_id,
+                    bound=True,
+                    auto_bound=False,
+                    reason="legacy_single_user",
+                )
+            else:
+                # 1) Resolve the IM sender to a Poco user_id.
+                resolution = await self._resolver.resolve(
+                    db,
+                    provider=message.provider,
+                    sender_open_id=message.sender_open_id,
+                    sender_union_id=message.sender_union_id,
+                )
             if not resolution.bound or resolution.user_id is None:
                 # IM identity has no Poco binding. Tell the user how to
                 # generate a code on the web and reply with it here.
@@ -1158,11 +1196,11 @@ class InboundMessageService:
             if not channel.enabled:
                 logger.info(
                     "im_channel_disabled_ignoring_inbound",
-                    extra={
-                        "provider": message.provider,
-                        "destination": message.destination,
-                        "channel_id": channel.id,
-                    },
+                    extra=inbound_message_log_context(
+                        message,
+                        user_id=user_id,
+                        channel_id=channel.id,
+                    ),
                 )
                 db.commit()
                 return
@@ -1238,7 +1276,10 @@ class InboundMessageService:
             if not sent:
                 logger.warning(
                     "im_inbound_reply_failed",
-                    extra={"provider": message.provider, "destination": target},
+                    extra=inbound_message_log_context(
+                        message,
+                        destination=target,
+                    ),
                 )
 
     @staticmethod
@@ -1410,7 +1451,14 @@ class BackendEventService:
         if not event.user_id or not event.user_id.strip():
             logger.warning(
                 "im_event_dropped_empty_user",
-                extra={"event_type": event.type, "event_id": event.id},
+                # ``user_id`` is intentionally absent — that is the
+                # whole reason we are dropping the event. Logging the
+                # event_id + session_id + type still lets operators
+                # trace it back to the producer.
+                extra=event_log_context(
+                    event,
+                    reason="empty_user_id",
+                ),
             )
             return 0
 
@@ -1544,13 +1592,27 @@ class BackendEventService:
           ``owner_user_id`` matches ``event_user_id`` OR they are bound
           to a Poco server of which ``event_user_id`` is an active
           member (shared-session model).
+
+        Performance: the function issues a constant number of queries
+        regardless of the number of candidate channels. Concretely:
+        - 1 query for ``subscribe_all`` channels (with owner filter)
+        - 2 queries for watch + active rows
+        - 1 batch query for the candidate channels
+        - 1 batch query for the distinct bound servers
+        - 1 batch query for the user's memberships in those servers
         """
         target: set[int] = set()
 
+        # 1) subscribe_all: scoped to the event's user so we never
+        #    leak another user's broadcast. The list_enabled call
+        #    pulls every row, but the post-filter narrows it to one
+        #    owner_user_id; a future improvement could push that into
+        #    SQL but it is a low-volume table today.
         for channel in ChannelRepository.list_enabled(db):
             if channel.subscribe_all and channel.owner_user_id == event_user_id:
                 target.add(channel.id)
 
+        # 2) Gather candidate channels from watch + active.
         candidate_ids: set[int] = set()
         for watch in WatchRepository.list_by_session(db, session_id=session_id):
             candidate_ids.add(watch.channel_id)
@@ -1559,32 +1621,97 @@ class BackendEventService:
         ):
             candidate_ids.add(active.channel_id)
 
-        from app.repositories.server_member_repository import (
-            ServerMemberRepository,
-        )
+        if not candidate_ids:
+            return target
 
-        for channel_id in candidate_ids:
-            channel = ChannelRepository.get_by_id(db, channel_id=channel_id)
+        # 3) Batch-load the candidate channels. Replaces the old
+        #    per-id ``get_by_id`` loop (N+1). Disabled rows are
+        #    filtered out in Python.
+        channels = ChannelRepository.list_by_ids(db, list(candidate_ids))
+        channels_by_id = {c.id: c for c in channels}
+
+        # 4) Owner-owned channels: pass through immediately.
+        server_bound_channel_ids: list[int] = []
+        for cid in candidate_ids:
+            channel = channels_by_id.get(cid)
             if channel is None or not channel.enabled:
                 continue
             if channel.owner_user_id == event_user_id:
                 target.add(channel.id)
                 continue
             if channel.server_id is not None:
-                # Defense in depth: a soft-deleted Poco server must not
-                # keep routing events to its old bound channels. We
-                # import here to avoid a circular import at module
-                # load time.
-                from app.repositories.server_repository import ServerRepository
+                server_bound_channel_ids.append(channel.id)
 
-                server = ServerRepository.get_by_id(db, channel.server_id)
-                if server is None:
-                    continue
-                membership = ServerMemberRepository.get_by_server_and_user(
-                    db, channel.server_id, event_user_id
-                )
-                if membership is not None and membership.status == "active":
-                    target.add(channel.id)
+        if not server_bound_channel_ids:
+            return target
+
+        # 5) Batch-load the distinct servers referenced by the
+        #    server-bound channels. ``include_deleted=True`` is
+        #    intentional: we need the ``is_deleted`` flag to filter
+        #    out soft-deleted servers, and the repository's default
+        #    ``is_deleted`` filter would hide the very rows we need
+        #    to inspect.
+        from app.repositories.server_repository import ServerRepository
+
+        server_ids: set[uuid.UUID] = {
+            sid
+            for cid in server_bound_channel_ids
+            if (sid := channels_by_id[cid].server_id) is not None
+        }
+        servers = ServerRepository.list_by_ids(
+            db, list(server_ids), include_deleted=True
+        )
+        servers_by_id = {s.id: s for s in servers}
+
+        # 6) Identify channels whose server is soft-deleted and drop
+        #    them with a structured log line so operators can see the
+        #    suppression (defense in depth — the previous per-channel
+        #    loop emitted the same log).
+        live_servers: dict[uuid.UUID, Server] = {}
+        for sid in server_ids:
+            server = servers_by_id.get(sid)
+            if server is None or server.is_deleted:
+                # Find the channels that pointed at this dead server
+                # so we can attach the channel id to the log line.
+                dead_channels = [
+                    cid
+                    for cid in server_bound_channel_ids
+                    if channels_by_id[cid].server_id == sid
+                ]
+                for cid in dead_channels:
+                    logger.info(
+                        "im_outbound_skipping_soft_deleted_server",
+                        extra={
+                            "channel_id": cid,
+                            "server_id": str(sid),
+                        },
+                    )
+                continue
+            live_servers[sid] = server
+
+        if not live_servers:
+            return target
+
+        # 7) One query to load the user's active memberships across
+        #    every live server in scope. The membership map is
+        #    keyed on server_id; a missing key means the user is
+        #    not a member of that server.
+        from app.repositories.server_member_repository import (
+            ServerMemberRepository,
+        )
+
+        memberships = ServerMemberRepository.list_active_by_user_and_servers(
+            db,
+            user_id=event_user_id,
+            server_ids=list(live_servers.keys()),
+        )
+        member_servers = {m.server_id for m in memberships}
+
+        for cid in server_bound_channel_ids:
+            channel = channels_by_id[cid]
+            sid = channel.server_id
+            if sid in member_servers:
+                target.add(cid)
 
         return target
 
@@ -1804,6 +1931,11 @@ class ImEventDispatcher:
                         "event_type": event.event_type,
                         "attempt_count": event.attempt_count,
                         "error": str(exc),
+                        # ``session_id`` is in the payload but not on
+                        # the ClaimedEvent surface; including the
+                        # attempt count + event_id already gives
+                        # operators a unique handle to look up the
+                        # producer log lines.
                     },
                 )
             else:

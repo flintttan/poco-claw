@@ -23,6 +23,7 @@ from app.repositories.im import (
     ImBindingCodeRepository,
     ImBindingRepository,
 )
+from app.services.provider_validation import assert_known_provider
 
 # 8 chars × 5 bits/char = 40 bits of entropy from Crockford base32.
 _BINDING_CODE_LENGTH = 8
@@ -56,7 +57,15 @@ class ImBindingService:
         "Generate Feishu bind code" and the user is told to paste it
         in their Feishu chat only).
         """
-        clean_provider = (provider or "").strip().lower() or None
+        if provider is not None and provider.strip():
+            # ``assert_known_provider`` raises AppException for any
+            # value outside the known IM provider whitelist. The Pydantic
+            # schema already validates this at the API boundary, but
+            # this is defense-in-depth: any internal caller that ends
+            # up here via a future code path is also protected.
+            clean_provider = assert_known_provider(provider)
+        else:
+            clean_provider = None
         now = datetime.now(timezone.utc)
         expires_at = now + timedelta(seconds=_BINDING_CODE_TTL_SECONDS)
         # Generate, persist, and retry on the (vanishingly rare) UNIQUE

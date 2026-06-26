@@ -34,9 +34,11 @@ from typing import TYPE_CHECKING
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.core.errors.exceptions import AppException
 from app.models.auth_identity import AuthIdentity
 from app.repositories.auth_identity_repository import AuthIdentityRepository
 from app.repositories.im import ImBindingRepository
+from app.services.provider_validation import assert_known_provider
 
 if TYPE_CHECKING:
     from app.models.im import ImBinding
@@ -78,12 +80,18 @@ class IdentityResolver:
         sender_open_id: str | None,
         sender_union_id: str | None,
     ) -> IdentityResolution:
-        provider = (provider or "").strip().lower()
+        # ``assert_known_provider`` rejects empty / unknown providers
+        # with a 400. InboundMessage.provider is normally a hardcoded
+        # constant from the parse functions, but a misconfigured
+        # gateway could forward an unknown value; this catches that
+        # before we burn a database query.
+        try:
+            provider = assert_known_provider(provider)
+        except AppException:
+            return IdentityResolution(user_id=None, bound=False, reason="no_provider")
         sender_open_id = (sender_open_id or "").strip() or None
         sender_union_id = (sender_union_id or "").strip() or None
 
-        if not provider:
-            return IdentityResolution(user_id=None, bound=False, reason="no_provider")
         if not sender_open_id and not sender_union_id:
             return IdentityResolution(user_id=None, bound=False, reason="no_sender_id")
 

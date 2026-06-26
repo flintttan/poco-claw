@@ -31,13 +31,14 @@ from app.services.im import (
     CommandService,
     _set_inbound_sender_context,
 )
+from tests._im_test_utils import _InboundSenderContextResetMixin
 
 
 def _channel(**overrides) -> Channel:
     channel = MagicMock(spec=Channel)
     channel.id = 1
-    channel.provider = "feishu"
-    channel.destination = "oc-test"
+    channel.provider = overrides.get("provider", "feishu")
+    channel.destination = overrides.get("destination", "oc-test")
     channel.enabled = True
     channel.subscribe_all = False
     channel.chat_type = overrides.get("chat_type", "group")
@@ -69,7 +70,9 @@ def _binding(*, user_id: str = "u-sender") -> MagicMock:
     return b
 
 
-class ServerBindCommandTests(unittest.IsolatedAsyncioTestCase):
+class ServerBindCommandTests(
+    _InboundSenderContextResetMixin, unittest.IsolatedAsyncioTestCase
+):
     """``/server`` and ``/server-off`` bind a channel to a Poco server."""
 
     async def test_server_requires_uuid(self) -> None:
@@ -200,16 +203,16 @@ class ServerBindCommandTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("channel owner", responses[0])
 
 
-class IdentityBindCommandTests(unittest.IsolatedAsyncioTestCase):
+class IdentityBindCommandTests(
+    _InboundSenderContextResetMixin, unittest.IsolatedAsyncioTestCase
+):
     """``/bind <code>`` and ``/unbind`` link an IM identity to a Poco user."""
 
     def setUp(self) -> None:
+        super().setUp()
         _set_inbound_sender_context(
             sender_open_id="ou-sender", sender_union_id="on-sender"
         )
-
-    def tearDown(self) -> None:
-        _set_inbound_sender_context(sender_open_id=None, sender_union_id=None)
 
     async def test_bind_code_requires_arg(self) -> None:
         service = CommandService()
@@ -233,13 +236,18 @@ class IdentityBindCommandTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("无效", responses[0])
 
     async def test_bind_code_rejects_provider_mismatch(self) -> None:
+        """A code minted for ``provider="feishu"`` must not be consumed
+        when the user sends it from a ``dingtalk`` channel. The code
+        must stay consumable for the matching provider."""
         service = CommandService()
         row = MagicMock()
         row.user_id = "u-target"
         row.provider = "feishu"
         with (
             patch.object(ImBindingCodeRepository, "get_active", return_value=row),
-            patch.object(ImBindingCodeRepository, "consume", return_value=True),
+            patch.object(
+                ImBindingCodeRepository, "consume", return_value=True
+            ) as consume_mock,
             patch.object(
                 ImBindingRepository,
                 "get_by_provider_im_user_id",
@@ -254,6 +262,67 @@ class IdentityBindCommandTests(unittest.IsolatedAsyncioTestCase):
                 backend=_backend(),
             )
         self.assertIn("feishu", responses[0])
+        # The code must NOT be consumed on a mismatch — the user can
+        # still paste the same code in the right provider's chat.
+        consume_mock.assert_not_called()
+
+    async def test_bind_code_provider_mismatch_keeps_code_active(self) -> None:
+        """After a provider-mismatch attempt, ``get_active`` for the
+        same code must still return the row, so the user can retry
+        in the matching provider's chat. This is the I2 regression —
+        proves the code is not silently burned on the wrong channel."""
+        service = CommandService()
+        row = MagicMock()
+        row.user_id = "u-target"
+        row.provider = "feishu"
+
+        with (
+            patch.object(ImBindingCodeRepository, "get_active", return_value=row),
+            patch.object(
+                ImBindingRepository,
+                "get_by_provider_im_user_id",
+                return_value=None,
+            ),
+        ):
+            # 1) Wrong-provider attempt
+            channel = _channel(provider="dingtalk")
+            responses_wrong = await service.handle_text(
+                db=MagicMock(),
+                channel=channel,
+                text="/bind BADC0DE",
+                backend=_backend(),
+            )
+        self.assertIn("feishu", responses_wrong[0])
+
+        # 2) Right-provider attempt with the same code must still see
+        # the row as active. We rebuild the mocks because the previous
+        # ``with`` block has exited.
+        with (
+            patch.object(ImBindingCodeRepository, "get_active", return_value=row),
+            patch.object(
+                ImBindingCodeRepository, "consume", return_value=True
+            ) as consume_mock,
+            patch.object(
+                ImBindingRepository,
+                "get_by_provider_im_user_id",
+                return_value=None,
+            ),
+            patch.object(ImBindingRepository, "create", return_value=MagicMock()),
+        ):
+            _set_inbound_sender_context(
+                sender_open_id="ou-sender", sender_union_id=None
+            )
+            channel = _channel(provider="feishu")
+            responses_right = await service.handle_text(
+                db=MagicMock(),
+                channel=channel,
+                text="/bind BADC0DE",
+                backend=_backend(),
+            )
+
+        self.assertIn("绑定成功", responses_right[0])
+        # ``consume`` is only invoked on the matching-provider attempt.
+        consume_mock.assert_called_once()
 
     async def test_bind_code_creates_binding_for_unbound_identity(self) -> None:
         service = CommandService()
@@ -377,7 +446,9 @@ class IdentityBindCommandTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("未绑定", responses[0])
 
 
-class WhoAmICommandTests(unittest.IsolatedAsyncioTestCase):
+class WhoAmICommandTests(
+    _InboundSenderContextResetMixin, unittest.IsolatedAsyncioTestCase
+):
     async def test_whoami_reports_state(self) -> None:
         server_id = uuid.uuid4()
         channel = _channel(server_id=server_id, chat_type="group")
@@ -396,7 +467,9 @@ class WhoAmICommandTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn(str(server_id), text)
 
 
-class StartCommandTests(unittest.IsolatedAsyncioTestCase):
+class StartCommandTests(
+    _InboundSenderContextResetMixin, unittest.IsolatedAsyncioTestCase
+):
     async def test_start_in_p2p_uses_backend_user(self) -> None:
         channel = _channel(chat_type="p2p", owner_user_id="u-p2p")
         service = CommandService()

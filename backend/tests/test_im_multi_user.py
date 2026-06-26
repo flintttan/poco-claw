@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import unittest
 import uuid
+from unittest import mock
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.models.im import Channel
@@ -536,9 +537,8 @@ class BackendEventServiceACLTests(unittest.TestCase):
             patch.object(ChannelRepository, "list_enabled", return_value=[]),
             patch.object(WatchRepository, "list_by_session", return_value=[watch]),
             patch.object(ActiveSessionRepository, "list_by_session", return_value=[]),
-            patch.object(ChannelRepository, "get_by_id", return_value=watch_channel),
             patch.object(
-                ServerMemberRepository, "get_by_server_and_user", return_value=None
+                ChannelRepository, "list_by_ids", return_value=[watch_channel]
             ),
         ):
             service = self._service()
@@ -557,9 +557,13 @@ class BackendEventServiceACLTests(unittest.TestCase):
             patch.object(ChannelRepository, "list_enabled", return_value=[]),
             patch.object(WatchRepository, "list_by_session", return_value=[watch]),
             patch.object(ActiveSessionRepository, "list_by_session", return_value=[]),
-            patch.object(ChannelRepository, "get_by_id", return_value=watch_channel),
             patch.object(
-                ServerMemberRepository, "get_by_server_and_user", return_value=None
+                ChannelRepository, "list_by_ids", return_value=[watch_channel]
+            ),
+            patch.object(
+                ServerMemberRepository,
+                "list_active_by_user_and_servers",
+                return_value=[],
             ),
         ):
             service = self._service()
@@ -577,24 +581,80 @@ class BackendEventServiceACLTests(unittest.TestCase):
         watch.channel_id = 40
         membership = MagicMock()
         membership.status = "active"
+        membership.server_id = server_id
+        server = MagicMock()
+        server.id = server_id
+        server.is_deleted = False
 
         with (
             patch.object(ChannelRepository, "list_enabled", return_value=[]),
             patch.object(WatchRepository, "list_by_session", return_value=[watch]),
             patch.object(ActiveSessionRepository, "list_by_session", return_value=[]),
-            patch.object(ChannelRepository, "get_by_id", return_value=bound_channel),
+            patch.object(
+                ChannelRepository, "list_by_ids", return_value=[bound_channel]
+            ),
+            patch(
+                "app.repositories.server_repository.ServerRepository"
+            ) as server_repo_mock,
             patch.object(
                 ServerMemberRepository,
-                "get_by_server_and_user",
-                return_value=membership,
+                "list_active_by_user_and_servers",
+                return_value=[membership],
             ),
         ):
+            server_repo_mock.list_by_ids.return_value = [server]
             service = self._service()
             target = service._get_target_channel_ids(
                 MagicMock(), session_id="s-1", event_user_id="u-member"
             )
 
         self.assertIn(40, target)
+        # ``list_by_ids`` must be called with ``include_deleted=True`` so
+        # the soft-deleted guard can do its own check.
+        server_repo_mock.list_by_ids.assert_called_once_with(
+            mock.ANY, [server_id], include_deleted=True
+        )
+
+    def test_soft_deleted_server_blocks_routing(self) -> None:
+        """A Poco server that was soft-deleted after a channel was
+        bound to it must not keep receiving events for that channel.
+        This is the I1 regression — defense in depth on top of
+        ``ServerRepository.list_by_ids``'s default filter."""
+        server_id = uuid.uuid4()
+        bound_channel = _channel(channel_id=50, owner_user_id="u-owner")
+        bound_channel.server_id = server_id
+        watch = MagicMock()
+        watch.channel_id = 50
+        membership = MagicMock()
+        membership.status = "active"
+        membership.server_id = server_id
+        server = MagicMock()
+        server.id = server_id
+        server.is_deleted = True  # soft-deleted after binding
+
+        with (
+            patch.object(ChannelRepository, "list_enabled", return_value=[]),
+            patch.object(WatchRepository, "list_by_session", return_value=[watch]),
+            patch.object(ActiveSessionRepository, "list_by_session", return_value=[]),
+            patch.object(
+                ChannelRepository, "list_by_ids", return_value=[bound_channel]
+            ),
+            patch(
+                "app.repositories.server_repository.ServerRepository"
+            ) as server_repo_mock,
+            patch.object(
+                ServerMemberRepository,
+                "list_active_by_user_and_servers",
+                return_value=[membership],
+            ),
+        ):
+            server_repo_mock.list_by_ids.return_value = [server]
+            service = self._service()
+            target = service._get_target_channel_ids(
+                MagicMock(), session_id="s-1", event_user_id="u-member"
+            )
+
+        self.assertNotIn(50, target)
 
 
 if __name__ == "__main__":

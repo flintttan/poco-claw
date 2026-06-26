@@ -64,6 +64,21 @@ class ChannelRepository:
         return list(db.execute(stmt).scalars().all())
 
     @staticmethod
+    def list_by_ids(
+        db: Session, channel_ids: list[int] | set[int] | tuple[int, ...]
+    ) -> list[Channel]:
+        """Batch fetch channels by primary key.
+
+        Avoids the N+1 pattern in :func:`BackendEventService._get_target_channel_ids`
+        where every candidate ``channel_id`` was loaded individually.
+        An empty input returns an empty list without hitting the database.
+        """
+        if not channel_ids:
+            return []
+        stmt = select(Channel).where(Channel.id.in_(channel_ids))
+        return list(db.execute(stmt).scalars().all())
+
+    @staticmethod
     def create(
         db: Session,
         *,
@@ -88,6 +103,28 @@ class ChannelRepository:
             raise ValueError(f"Channel not found: {channel_id}")
         channel.subscribe_all = bool(enabled)
         return channel
+
+    @staticmethod
+    def list_by_server(
+        db: Session,
+        *,
+        server_id: uuid.UUID,
+    ) -> list[Channel]:
+        """Return all channels bound to ``server_id``.
+
+        Used by the server-detail UI to surface "which IM chats are
+        currently linked to this server". The list is not filtered
+        by ``enabled`` — the UI may want to show disabled channels
+        so the user can re-enable them. Order by id so the list is
+        stable across calls (avoids a UI that randomly shuffles
+        rows on every refresh).
+        """
+        stmt = (
+            select(Channel)
+            .where(Channel.server_id == server_id)
+            .order_by(Channel.id.asc())
+        )
+        return list(db.execute(stmt).scalars().all())
 
 
 class ChannelDeliveryRepository:

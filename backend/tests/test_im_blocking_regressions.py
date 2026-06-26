@@ -38,6 +38,7 @@ from app.repositories.im import (
 from app.schemas.im import InboundMessage
 from app.services.im import CommandService, InboundMessageService
 from app.services.identity_resolver import IdentityResolution, IdentityResolver
+from tests._im_test_utils import _InboundSenderContextResetMixin
 
 
 def _channel(**overrides) -> Channel:
@@ -291,7 +292,9 @@ class AutoBindUnionIdLookupTests(unittest.IsolatedAsyncioTestCase):
 # ---------------------------------------------------------------------------
 
 
-class AutoBindEarlyCommitTests(unittest.IsolatedAsyncioTestCase):
+class AutoBindEarlyCommitTests(
+    _InboundSenderContextResetMixin, unittest.IsolatedAsyncioTestCase
+):
     """After the resolver auto-binds, the binding must be committed
     before subsequent steps run. Otherwise an exception during
     channel ACL / command dispatch would roll the binding back.

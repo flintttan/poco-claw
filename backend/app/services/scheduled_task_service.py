@@ -118,6 +118,20 @@ class ScheduledTaskService:
         cron_expr = self._validate_cron(request.cron)
         tz_name = self._validate_timezone(request.timezone)
 
+        # Shared-session guard: scheduled tasks always run on behalf
+        # of a single user (the one who created them). They cannot
+        # be attached to a session that is shared across multiple IM
+        # users via a server-bound channel, because the executor has
+        # no way to know which user the run "belongs to" when it
+        # fires later. The current ``ScheduledTaskCreateRequest``
+        # schema does not accept an existing ``session_id`` —
+        # ``reuse_session=True`` always creates a fresh session
+        # owned by ``user_id`` — so the invariant is satisfied
+        # implicitly. This comment anchors the rule for future
+        # contributors; if the schema grows an optional
+        # ``session_id`` field, the check has to be re-introduced
+        # here.
+
         # Build a pinned config snapshot using existing TaskService merge logic
         config_snapshot = (
             task_service._build_config_snapshot(  # noqa: SLF001

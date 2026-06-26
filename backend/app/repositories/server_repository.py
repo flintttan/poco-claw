@@ -25,6 +25,27 @@ class ServerRepository:
         return query.first()
 
     @staticmethod
+    def list_by_ids(
+        session_db: Session,
+        server_ids: list[uuid.UUID] | set[uuid.UUID] | tuple[uuid.UUID, ...],
+        *,
+        include_deleted: bool = False,
+    ) -> list[Server]:
+        """Batch fetch servers by primary key.
+
+        Mirrors :func:`ChannelRepository.list_by_ids` — used by the
+        multi-channel event router to avoid an N+1 query when
+        resolving the soft-deleted state of every bound server.
+        An empty input returns an empty list without hitting the DB.
+        """
+        if not server_ids:
+            return []
+        query = session_db.query(Server).filter(Server.id.in_(server_ids))
+        if not include_deleted:
+            query = query.filter(Server.is_deleted.is_(False))
+        return query.all()
+
+    @staticmethod
     def get_by_slug(session_db: Session, slug: str) -> Server | None:
         return (
             session_db.query(Server)

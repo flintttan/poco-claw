@@ -34,3 +34,15 @@ class ImBindingResponse(BaseModel):
     bound_via: str
     bound_at: datetime
     last_seen_at: datetime | None = None
+
+
+class ServerImChannelResponse(BaseModel):
+    """One row in the server-detail page's "Linked IM chats" panel."""
+
+    id: int
+    provider: str
+    destination: str
+    chat_type: str
+    enabled: bool
+    last_bound_by_user_id: str | None = None
+    last_bound_at: datetime | None = None

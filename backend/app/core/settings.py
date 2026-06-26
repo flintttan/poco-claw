@@ -87,6 +87,14 @@ class Settings(BaseSettings):
 
     # Embedded IM integration
     backend_user_id: str = Field(default="default", alias="BACKEND_USER_ID")
+    # Gray-scale flag for the multi-user IM integration. When False
+    # (the default) the inbound path falls back to the legacy single-
+    # user mode (all IM traffic attributed to ``backend_user_id``).
+    # When True, every inbound sender is resolved to its Poco user
+    # via the binding / OAuth-auto-bind pipeline and ACLs are
+    # enforced per sender. Set to False to keep the historical
+    # behaviour without rolling back the migration.
+    im_multiuser_enabled: bool = Field(default=False, alias="IM_MULTIUSER_ENABLED")
     frontend_public_url: str = Field(
         default="http://localhost:3000", alias="FRONTEND_PUBLIC_URL"
     )
