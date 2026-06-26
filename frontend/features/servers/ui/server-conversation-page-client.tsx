@@ -139,6 +139,7 @@ import {
   SearchPanel,
 } from "@/features/servers/ui/conversation-panels";
 import { ServerAccessDialog } from "@/features/servers/ui/server-access-dialog";
+import { ServerImChannelsPanel } from "@/features/servers/ui/server-im-channels-panel";
 import { ServerWorkspaceSidebar } from "@/features/servers/ui/server-workspace-sidebar";
 import type {
   ColleagueSelection,
@@ -3937,21 +3938,30 @@ export function ServerConversationPageClient({
                 )}
               </section>
             ) : colleaguesModeActive ? (
-              <ColleaguesPanel
-                agents={colleagueDirectoryAgents}
-                presets={presets}
-                members={serverMembers}
-                selection={colleagueSelection}
-                activeChannelIdByAgentId={activeChannelIdByAgentId}
-                canCreateAgent={canManageServerOps}
-                canInviteMembers={canManageServerOps}
-                onSelect={(selection) => {
-                  setDrawer({ type: "colleague", selection });
-                }}
-                onOpenActiveChannel={openChannelById}
-                onAddAgent={() => setAgentPresetOpen(true)}
-                onInviteMember={() => setServerAccessOpen(true)}
-              />
+              <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background">
+                {selectedServerId ? (
+                  <div className="shrink-0 px-4 pt-4 sm:px-6">
+                    <ServerImChannelsPanel serverId={selectedServerId} />
+                  </div>
+                ) : null}
+                <div className="min-h-0 min-w-0 flex-1 pt-4">
+                  <ColleaguesPanel
+                    agents={colleagueDirectoryAgents}
+                    presets={presets}
+                    members={serverMembers}
+                    selection={colleagueSelection}
+                    activeChannelIdByAgentId={activeChannelIdByAgentId}
+                    canCreateAgent={canManageServerOps}
+                    canInviteMembers={canManageServerOps}
+                    onSelect={(selection) => {
+                      setDrawer({ type: "colleague", selection });
+                    }}
+                    onOpenActiveChannel={openChannelById}
+                    onAddAgent={() => setAgentPresetOpen(true)}
+                    onInviteMember={() => setServerAccessOpen(true)}
+                  />
+                </div>
+              </section>
             ) : tasksModeActive ? (
               <ChannelTasksWorkspace
                 tasks={tasks}

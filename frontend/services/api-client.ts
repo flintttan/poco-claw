@@ -206,6 +206,7 @@ export const API_ENDPOINTS = {
   // Servers
   servers: "/servers",
   server: (serverId: string) => `/servers/${serverId}`,
+  serverImChannels: (serverId: string) => `/servers/${serverId}/im-channels`,
   serverChannels: (serverId: string) => `/servers/${serverId}/channels`,
   serverChannel: (serverId: string, channelId: string) =>
     `/servers/${serverId}/channels/${channelId}`,
