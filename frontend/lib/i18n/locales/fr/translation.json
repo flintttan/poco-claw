@@ -99,6 +99,21 @@
       "channelsLoadFailed": "Échec du chargement des canaux"
     }
   },
+  "server": {
+    "imChannels": {
+      "title": "Linked IM chats",
+      "subtitle": "IM chats currently bound to this server. Messages sent in these chats will reach Poco on behalf of the bound members.",
+      "empty": "No IM chats are bound to this server yet.",
+      "loadError": "Failed to load bound IM chats.",
+      "retry": "Retry",
+      "enabled": "active",
+      "disabled": "paused",
+      "group": "group",
+      "p2p": "1:1",
+      "boundBy": "bound by",
+      "boundAt": "bound"
+    }
+  },
   "channelTasks": {
     "title": "Channel tasks",
     "subtitle": "{{server}} / #{{channel}}",
@@ -2916,6 +2931,21 @@
       "runtimeVisibilityAdminsOnlyHint": "Injecter uniquement dans les environnements d’exécution lancés par des administrateurs.",
       "runtimeVisibilityAllUsersHint": "Peut être injectée dans les environnements d’exécution de tous les utilisateurs si la politique globale l’autorise.",
       "policyDisabledForUsers": "Désactivé pour les utilisateurs"
+    },
+    "connections": {
+      "title": "Connected Accounts",
+      "subtitle": "Link your Poco account with IM (Feishu, DingTalk, Telegram) so the bot knows who is chatting with it.",
+      "linkNew": "Link a new IM account",
+      "provider": "Provider",
+      "generating": "Generating…",
+      "generateCode": "Generate binding code",
+      "copied": "Copied to clipboard.",
+      "codeInstructions": "Open any IM chat with the Poco bot and send: /bind <code>",
+      "codeExpires": "Expires at",
+      "linkedAccounts": "Linked accounts",
+      "empty": "No IM accounts linked yet. Generate a code above to link one.",
+      "boundAt": "linked",
+      "unbind": "Unbind"
     }
   },
   "validation": {

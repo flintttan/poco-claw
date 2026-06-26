@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   createBindingCode,
@@ -26,6 +26,7 @@ export function useImBindings(): UseImBindings {
   const [bindings, setBindings] = useState<ImBinding[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const bindingsRef = useRef<ImBinding[]>([]);
 
   const refresh = useCallback(async () => {
     setIsLoading(true);
@@ -54,19 +55,48 @@ export function useImBindings(): UseImBindings {
     [],
   );
 
-  const remove = useCallback(
-    async (bindingId: number): Promise<boolean> => {
-      try {
-        await deleteBinding(bindingId);
-        await refresh();
-        return true;
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to unbind");
-        return false;
-      }
-    },
-    [refresh],
-  );
+  const remove = useCallback(async (bindingId: number): Promise<boolean> => {
+    // Optimistic update: drop the row from local state immediately
+    // so the user sees the unbind take effect without a full
+    // list-reload flicker. The list is reconciled from the server
+    // in the background; if the DELETE fails we restore the row
+    // and surface the error.
+    const previousBindings = bindingsRef.current;
+    const removedIndex = previousBindings.findIndex(
+      (binding) => binding.id === bindingId,
+    );
+    const removedBinding =
+      removedIndex >= 0 ? previousBindings[removedIndex] : null;
+    if (removedBinding === null) {
+      return false;
+    }
+    setError(null);
+    setBindings((current) =>
+      current.filter((binding) => binding.id !== bindingId),
+    );
+    try {
+      await deleteBinding(bindingId);
+      return true;
+    } catch (err) {
+      setBindings((current) => {
+        if (current.some((binding) => binding.id === bindingId)) {
+          return current;
+        }
+        const insertAt = Math.min(removedIndex, current.length);
+        return [
+          ...current.slice(0, insertAt),
+          removedBinding,
+          ...current.slice(insertAt),
+        ];
+      });
+      setError(err instanceof Error ? err.message : "Failed to unbind");
+      return false;
+    }
+  }, []);
+
+  useEffect(() => {
+    bindingsRef.current = bindings;
+  }, [bindings]);
 
   useEffect(() => {
     void refresh();

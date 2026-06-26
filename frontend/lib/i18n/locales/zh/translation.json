@@ -99,6 +99,21 @@
       "channelsLoadFailed": "加载频道失败"
     }
   },
+  "server": {
+    "imChannels": {
+      "title": "已绑定的 IM 群",
+      "subtitle": "当前绑定到本 Server 的 IM 聊天。这些聊天中发送的消息会以绑定成员的身份推送到 Poco。",
+      "empty": "尚无 IM 聊天绑定到本 Server。",
+      "loadError": "加载已绑定 IM 聊天失败。",
+      "retry": "重试",
+      "enabled": "已启用",
+      "disabled": "已暂停",
+      "group": "群聊",
+      "p2p": "单聊",
+      "boundBy": "绑定者",
+      "boundAt": "绑定于"
+    }
+  },
   "channelTasks": {
     "title": "频道任务",
     "subtitle": "{{server}} / #{{channel}}",
@@ -2888,6 +2903,21 @@
       "runtimeVisibilityAllUsersHint": "自动注入到所有用户的任务运行环境中。",
       "runtimeVisibilityProtectedWarning": "该 key 命中了受保护的运行时 key/前缀。可见范围设置可以保存，但自动运行时注入仍会被阻止。",
       "policyDisabledForUsers": "对用户禁用"
+    },
+    "connections": {
+      "title": "已连接账号",
+      "subtitle": "将 Poco 账号与 IM（飞书、钉钉、电报）绑定，让 bot 知道是谁在跟它聊天。",
+      "linkNew": "绑定新的 IM 账号",
+      "provider": "渠道",
+      "generating": "生成中…",
+      "generateCode": "生成绑定码",
+      "copied": "已复制到剪贴板。",
+      "codeInstructions": "在任意 Poco bot 所在的 IM 聊天中发送：/bind <绑定码>",
+      "codeExpires": "过期时间",
+      "linkedAccounts": "已绑定账号",
+      "empty": "暂未绑定 IM 账号，请先生成一个绑定码。",
+      "boundAt": "绑定于",
+      "unbind": "解绑"
     }
   },
   "validation": {
