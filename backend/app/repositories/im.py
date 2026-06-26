@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from sqlalchemy import or_, select
+from sqlalchemy import or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -463,15 +463,38 @@ class ImBindingCodeRepository:
         consumed_by: str,
     ) -> bool:
         """Mark a code as consumed. Returns True on success, False if it
-        was already consumed (race-safe via conditional UPDATE)."""
-        if row.consumed_at is not None:
-            return False
+        was already consumed or expired.
+
+        Race-safe: the UPDATE is gated by ``consumed_at IS NULL`` and
+        ``expires_at > now`` in the WHERE clause. The rowcount tells
+        us whether this caller won the race; reading then mutating in
+        Python would let two concurrent ``/bind`` requests both
+        succeed, since both would observe ``consumed_at is None``.
+        """
         now = datetime.now(timezone.utc)
-        if row.expires_at <= now:
-            return False
-        row.consumed_at = now
-        row.consumed_by = consumed_by
+        # Audit string is bounded by column length (255).
+        consumed_by_value = (consumed_by or "")[:255]
+        stmt = (
+            update(ImBindingCode)
+            .where(
+                ImBindingCode.id == row.id,
+                ImBindingCode.consumed_at.is_(None),
+                ImBindingCode.expires_at > now,
+            )
+            .values(consumed_at=now, consumed_by=consumed_by_value)
+        )
+        result = db.connection().execute(stmt)
         db.flush()
+        if result.rowcount == 0:
+            # Lost the race (already consumed) or expired. Sync the
+            # in-memory copy so callers see the truth without an extra
+            # round trip.
+            db.refresh(row)
+            return False
+        # Keep the in-memory instance consistent for downstream reads
+        # in the same transaction.
+        row.consumed_at = now
+        row.consumed_by = consumed_by_value
         return True
 
     @staticmethod

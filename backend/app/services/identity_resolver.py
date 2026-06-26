@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -36,6 +37,9 @@ from sqlalchemy.orm import Session
 from app.models.auth_identity import AuthIdentity
 from app.repositories.auth_identity_repository import AuthIdentityRepository
 from app.repositories.im import ImBindingRepository
+
+if TYPE_CHECKING:
+    from app.models.im import ImBinding
 
 logger = logging.getLogger(__name__)
 
@@ -178,23 +182,39 @@ class IdentityResolver:
 
         Returns the user_id on success, ``None`` if the binding already
         raced ahead of us (handled by the UNIQUE constraint).
+
+        Lookup correctness: the existing-bindings scan checks *both*
+        ``(provider, im_user_id)`` and ``(provider, im_union_id)``,
+        because a previous binding may have been created from the
+        union side of an IM event while the current event carries a
+        different open_id. Missing the im_union_id branch lets us
+        insert a duplicate row that collides on the unique constraint
+        and is then silently discarded, which is exactly the bug the
+        OAuth auto-bind path is meant to avoid.
         """
         # If the user is already bound, return that user. This can
         # happen if the same OAuth identity already produced a binding
         # for a different open_id (e.g. Feishu OAuth returns union_id,
         # IM event returns open_id, both should map to the same user).
-        for pid in (im_union_id, im_user_id):
+        for pid in (im_user_id, im_union_id):
             if not pid:
                 continue
             existing = ImBindingRepository.get_by_provider_im_user_id(
                 db, provider=provider, im_user_id=pid
             )
-            if existing is not None and existing.user_id == identity.user_id:
-                return existing.user_id
-            # If the binding exists but maps to a different user, do
-            # not auto-rebind — that would silently change ownership
-            # and the caller must resolve it manually.
-            if existing is not None and existing.user_id != identity.user_id:
+            if existing is not None:
+                if existing.user_id == identity.user_id:
+                    return existing.user_id
+                # If the binding exists but maps to a different user,
+                # do not auto-rebind — that would silently change
+                # ownership and the caller must resolve it manually.
+                return None
+            existing = ImBindingRepository.get_by_provider_im_union_id(
+                db, provider=provider, im_union_id=pid
+            )
+            if existing is not None:
+                if existing.user_id == identity.user_id:
+                    return existing.user_id
                 return None
 
         binding = ImBindingRepository.create(
@@ -209,20 +229,29 @@ class IdentityResolver:
             with db.begin_nested():
                 db.flush([binding])
         except IntegrityError:
-            # Concurrent auto-bind won. Re-read and trust the winner.
-            existing = ImBindingRepository.get_by_provider_im_user_id(
-                db, provider=provider, im_user_id=im_user_id
-            )
-            if existing is not None:
-                if existing.user_id == identity.user_id:
-                    return existing.user_id
+            # Concurrent auto-bind won (or a row with the same
+            # im_union_id already exists from a different open_id).
+            # Re-read by both keys and trust the winner.
+            winner: ImBinding | None = None
+            for pid in (im_user_id, im_union_id):
+                if not pid or winner is not None:
+                    continue
+                winner = ImBindingRepository.get_by_provider_im_user_id(
+                    db, provider=provider, im_user_id=pid
+                ) or ImBindingRepository.get_by_provider_im_union_id(
+                    db, provider=provider, im_union_id=pid
+                )
+            if winner is not None and winner.user_id == identity.user_id:
+                return winner.user_id
+            if winner is not None:
                 logger.warning(
                     "im_oauth_auto_bind_conflict",
                     extra={
                         "provider": provider,
                         "im_user_id": im_user_id,
+                        "im_union_id": im_union_id,
                         "oauth_user": identity.user_id,
-                        "existing_user": existing.user_id,
+                        "existing_user": winner.user_id,
                     },
                 )
             return None
@@ -232,6 +261,7 @@ class IdentityResolver:
                 "user_id": identity.user_id,
                 "provider": provider,
                 "im_user_id": im_user_id,
+                "im_union_id": im_union_id,
             },
         )
         return identity.user_id

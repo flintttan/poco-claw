@@ -1057,8 +1057,19 @@ _inbound_sender_context: ContextVar[tuple[str | None, str | None]] = ContextVar(
 
 def _set_inbound_sender_context(
     *, sender_open_id: str | None, sender_union_id: str | None
-) -> None:
-    _inbound_sender_context.set((sender_open_id, sender_union_id))
+) -> Any:
+    """Set the current inbound sender on the task-local ContextVar.
+
+    Returns the reset token so the caller can ``reset()`` it in a
+    ``finally`` block. Without the token a subsequent message handled
+    by the same task could read stale sender ids if the earlier
+    handler returned early.
+    """
+    return _inbound_sender_context.set((sender_open_id, sender_union_id))
+
+
+def _reset_inbound_sender_context(token: Any) -> None:
+    _inbound_sender_context.reset(token)
 
 
 def _current_inbound_sender_open_id() -> str | None:
@@ -1083,6 +1094,9 @@ class InboundMessageService:
         db = SessionLocal()
         responses: list[str] = []
         send_address: str | None = None
+        sender_token = _inbound_sender_context.set(
+            (message.sender_open_id, message.sender_union_id)
+        )
         try:
             if message.message_id:
                 dedup_key = f"in:{message.provider}:{message.message_id}"
@@ -1090,10 +1104,6 @@ class InboundMessageService:
                     return
 
             # 1) Resolve the IM sender to a Poco user_id.
-            _set_inbound_sender_context(
-                sender_open_id=message.sender_open_id,
-                sender_union_id=message.sender_union_id,
-            )
             resolution = await self._resolver.resolve(
                 db,
                 provider=message.provider,
@@ -1119,6 +1129,21 @@ class InboundMessageService:
                 if resolution.auto_bound
                 else None
             )
+
+            # If the resolver just inserted an im_bindings row, commit
+            # it now. A later step (channel ACL, command dispatch, IM
+            # gateway) raising would otherwise roll the binding back
+            # too, forcing the next inbound to re-resolve and re-bind.
+            # This early commit is safe: a duplicate insert is guarded
+            # by the UNIQUE constraint inside the resolver.
+            if resolution.auto_bound:
+                try:
+                    db.commit()
+                except IntegrityError:
+                    # The unique index caught a race with another
+                    # handler. Fall through; the in-memory resolution
+                    # is still valid for the rest of this request.
+                    db.rollback()
 
             # 2) Get or create the channel owned by this user (first
             # interaction wins; subsequent messages in the same chat do
@@ -1180,6 +1205,12 @@ class InboundMessageService:
             db.rollback()
             raise
         finally:
+            try:
+                _reset_inbound_sender_context(sender_token)
+            except Exception:
+                # Token reset is best-effort cleanup; never mask the
+                # original exception (if any) with a ContextVar error.
+                pass
             db.close()
 
         if not responses:
